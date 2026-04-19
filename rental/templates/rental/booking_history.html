@@ -1,0 +1,179 @@
+{% extends 'rental/base.html' %} 
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-history text-primary"></i> Lịch sử chuyến đi</h2>
+    <a href="{% url 'administration' %}" class="btn btn-secondary">Quay lại</a>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="historyTable">
+        <thead class="table-dark">
+          <tr>
+            <th>Xe</th>
+            <th>Bắt đầu</th>
+            <th>Kết thúc</th>
+            <th>Quãng đường</th>
+            <th>Tổng tiền</th>
+            <th>Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          {% for h in histories %}
+          <tr class="history-item">
+            <td>
+              <span class="fw-bold">{{ h.car.brand_name }}</span><br />
+              <small class="text-muted">{{ h.car.license_plate }}</small>
+            </td>
+            <td>
+              <small>{{ h.start_time|date:"d/m/Y H:i" }}</small><br />
+              <span class="badge bg-light text-dark border">
+                <i class="fas fa-map-marker-alt text-success"></i>
+                {{ h.pickup_station.name|default:"-" }}
+              </span>
+            </td>
+            <td>
+              {% if h.end_time %}
+                <small>{{ h.end_time|date:"d/m/Y H:i" }}</small><br />
+                <span class="badge bg-light text-dark border">
+                  <i class="fas fa-flag-checkered text-danger"></i>
+                  {{ h.return_station.name|default:"-" }}
+                </span>
+              {% else %}
+                <span class="text-muted italic small">Đang di chuyển...</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ h.display_km|stringformat:".2f" }} km 
+              {% if h.status == 'ongoing' and h.is_violated %}
+                <br /><span class="badge bg-danger">Ngoài vùng an toàn</span>
+              {% endif %}
+            </td>
+            <td class="fw-bold text-primary">
+              {{ h.display_fee|floatformat:0 }}đ 
+              {% if h.status == 'ongoing' %}<div class="text-muted" style="font-size: 0.7rem; font-weight: normal">(Tạm tính)</div>{% endif %}
+            </td>
+            <td>
+              {% if h.status == 'ongoing' %}
+                <div class="d-flex flex-column align-items-center gap-2">
+                  <span class="badge bg-warning text-dark animate-pulse">Đang đi</span>
+                </div>
+              {% else %}
+                <span class="badge bg-success">Hoàn thành</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr id="emptyRow">
+            <td colspan="6" class="text-center py-5 text-muted">
+              Bạn chưa có chuyến đi nào. <a href="{% url 'car_types' %}">Đặt xe ngay!</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <nav class="mt-4">
+    <ul class="pagination justify-content-center" id="paginationList">
+      </ul>
+  </nav>
+</div>
+
+<script>
+  const itemsPerPage = 10;
+  let currentPage = 1;
+
+  function updatePagination() {
+    const items = document.querySelectorAll(".history-item");
+    const totalPages = Math.ceil(items.length / itemsPerPage);
+    
+    if (items.length === 0) return;
+
+    // Ẩn/Hiện các dòng theo trang
+    items.forEach((item, index) => {
+      const start = (currentPage - 1) * itemsPerPage;
+      const end = start + itemsPerPage;
+      if (index >= start && index < end) {
+        item.style.display = "";
+      } else {
+        item.style.display = "none";
+      }
+    });
+
+    renderControls(totalPages);
+  }
+
+  function renderControls(total) {
+    const list = document.getElementById("paginationList");
+    list.innerHTML = "";
+    if (total <= 1) return;
+
+    // Nút Trước
+    list.innerHTML += `
+      <li class="page-item ${currentPage === 1 ? "disabled" : ""}">
+        <a class="page-link" href="#" onclick="changePage(event, ${currentPage - 1})">
+          <i class="fas fa-chevron-left"></i>
+        </a>
+      </li>`;
+
+    // Các ô số trang
+    for (let i = 1; i <= total; i++) {
+      list.innerHTML += `
+        <li class="page-item ${i === currentPage ? "active" : ""}">
+          <a class="page-link shadow-sm mx-1 rounded fw-bold" href="#" onclick="changePage(event, ${i})">${i}</a>
+        </li>`;
+    }
+
+    // Nút Sau
+    list.innerHTML += `
+      <li class="page-item ${currentPage === total ? "disabled" : ""}">
+        <a class="page-link" href="#" onclick="changePage(event, ${currentPage + 1})">
+          <i class="fas fa-chevron-right"></i>
+        </a>
+      </li>`;
+  }
+
+  function changePage(e, page) {
+    e.preventDefault();
+    currentPage = page;
+    updatePagination();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Khởi tạo khi trang tải xong
+  document.addEventListener("DOMContentLoaded", updatePagination);
+</script>
+
+<style>
+  /* Hiệu ứng nhấp nháy cho trạng thái đang đi */
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Style cho phân trang ô vuông giống thiết kế của bạn */
+  .pagination .page-link {
+    border: none;
+    color: #495057;
+    padding: 8px 14px;
+    transition: all 0.2s;
+  }
+  .pagination .page-item.active .page-link {
+    background-color: #0d6efd;
+    color: white !important;
+  }
+  .pagination .page-item.disabled .page-link {
+    color: #dee2e6;
+    background: transparent;
+  }
+  .pagination .page-link:hover:not(.disabled) {
+    background-color: #e9ecef;
+  }
+</style>
+{% endblock %}

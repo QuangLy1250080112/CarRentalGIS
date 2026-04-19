@@ -1,0 +1,48 @@
+{% extends 'rental/base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-sm p-4 mx-auto" style="max-width: 600px;">
+        <h3 class="fw-bold mb-4"><i class="fas fa-plus-circle text-primary"></i> Thêm xe vào hệ thống</h3>
+        
+        <form action="/addCar_save/" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label class="form-label fw-bold">Chọn Loại xe:</label>
+                <select name="car_type_id" class="form-select" required>
+                    <option value="">-- Chọn loại xe --</option>
+                    {% for type in car_list %}
+                    <option value="{{ type.id }}">{{ type.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Hãng xe:</label>
+                <input type="text" name="brand_name" class="form-control" placeholder="Ví dụ: Toyota, Mazda..." required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Biển số xe:</label>
+                <input type="text" name="license_plate" class="form-control" placeholder="Ví dụ: 51G-123.45" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Cập nhật phí vượt định mức (VNĐ/km):</label>
+                <input type="number" name="base_price_per_km" class="form-control" placeholder="Ví dụ: 15000" min="0" required>
+                <small class="text-muted italic">* Lưu ý: Thao tác này sẽ cập nhật giá chung cho loại xe đã chọn.</small>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-bold">Hình ảnh xe:</label>
+                <input type="file" name="car_image" class="form-control" accept="image/*">
+            </div>
+
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary btn-lg" type="submit">XÁC NHẬN THÊM</button>
+                <a href="{% url 'car_types' %}" class="btn btn-light">Hủy bỏ</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

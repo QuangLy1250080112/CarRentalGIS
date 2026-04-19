@@ -1,0 +1,11 @@
+{% extends 'rental/base.html' %}
+{% block content %}
+<div class="container text-center py-5">
+    <div class="display-1 text-muted"><i class="fas fa-exclamation-triangle"></i> 404</div>
+    <h2 class="fw-bold">Không tìm thấy trang</h2>
+    <p class="text-muted">Đường dẫn bạn nhập không tồn tại hoặc đã bị di dời.</p>
+    <a href="{% url 'home' %}" class="btn btn-primary mt-3">
+        <i class="fas fa-home"></i> Quay lại trang chủ
+    </a>
+</div>
+{% endblock %}

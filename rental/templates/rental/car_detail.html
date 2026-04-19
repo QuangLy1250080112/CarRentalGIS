@@ -1,0 +1,348 @@
+{% extends 'rental/base.html' %} {% load static %} {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<div class="container mt-5">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="{% url 'car_types' %}" class="text-decoration-none">Loại xe</a>
+      </li>
+      <li class="breadcrumb-item active">{{ type.name }}</li>
+    </ol>
+  </nav>
+
+  <div class="mt-4 mb-5 d-flex justify-content-between align-items-end flex-wrap">
+    <div>
+      <h2 class="fw-bold text-dark">
+        <i class="fas fa-list text-primary me-2"></i>{{ type.name }}
+      </h2>
+    </div>
+
+    <div class="mb-3" style="min-width: 300px">
+      <div class="input-group shadow-sm">
+        <span class="input-group-text bg-white border-end-0">
+          <i class="fas fa-search text-muted"></i>
+        </span>
+        <input
+          type="text"
+          id="brandSearch"
+          class="form-control border-start-0 ps-0"
+          placeholder="Tìm tên hãng xe..."
+        />
+      </div>
+    </div>
+  </div>
+
+  <div id="carList">
+    {% for car in cars %}
+    <div class="card mb-4 shadow-sm border-0 car-card" data-brand="{{ car.brand_name }}" style="border-radius: 15px; overflow: hidden">
+      <div class="row g-0">
+        <div class="col-md-4">
+          {% if car.image %}
+          <img src="{{ car.image.url }}" class="img-fluid h-100 object-fit-cover" alt="{{ car.license_plate }}" />
+          {% else %}
+          <div class="bg-light d-flex align-items-center justify-content-center h-100" style="min-height: 200px">
+            <i class="fas fa-car fa-4x text-secondary"></i>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="col-md-8">
+          <div class="card-body p-4 d-flex flex-column h-100">
+            
+            <div>
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h3 class="fw-bold text-dark mb-0">{{ car.brand_name }}</h3>
+                <div class="text-end">
+                  <span class="text-muted small d-block">Giá thuê từ</span>
+                  <span class="fs-5 fw-bold text-primary">200.000đ<small class="text-muted fs-6">/5km đầu</small></span>
+                  <br />
+                  <span class="text-muted small">+ {{ type.base_price_per_km|floatformat:0 }}đ/km tiếp theo</span>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                {% if request.session.role == 'admin' %}
+                <form method="post" action="{% url 'update_car_short_description' %}" class="car-short-desc-form border rounded-3 p-3 bg-light bg-opacity-50">
+                  {% csrf_token %}
+                  <input type="hidden" name="car_id" value="{{ car.id }}" />
+                  <input type="hidden" name="car_type_id" value="{{ type.id }}" />
+                  <label class="form-label small text-secondary fw-semibold mb-1">Mô tả ngắn (chỉ quản trị viên chỉnh sửa)</label>
+                  <textarea name="short_description" class="form-control form-control-sm border-0 shadow-sm" rows="3" maxlength="2000" placeholder="Nhập mô tả hiển thị cho khách...">{{ car.short_description }}</textarea>
+                  <button type="submit" class="btn btn-sm btn-primary rounded-pill mt-2 px-3">
+                    <i class="fas fa-save me-1"></i>Lưu mô tả
+                  </button>
+                </form>
+                {% elif car.short_description %}
+                <div class="car-short-desc-readonly border rounded-3 p-3 bg-light small text-secondary" style="border-left: 4px solid #0d6efd !important;">
+                  {{ car.short_description|linebreaksbr }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-auto pt-3">
+              <span class="badge {% if car.is_available %}bg-success{% else %}bg-danger{% endif %} rounded-pill px-3 py-2">
+                {% if car.is_available %} Còn xe {% else %} Hết xe {% endif %}
+              </span>
+
+              <div class="d-flex">
+                <button
+                  class="btn btn-primary px-4 py-2 rounded-pill shadow-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#bookingModal"
+                  onclick="setCarData('{{ car.id }}', '{{ car.license_plate }}', '{{ car.brand_name }}')"
+                >
+                  <i class="fas fa-calendar-check me-2"></i>Đặt xe
+                </button>
+
+                {% if request.session.role == 'admin' %}
+                <a href="{% url 'delete_car' car.id %}" 
+                  class="btn btn-outline-danger px-4 py-2 rounded-pill shadow-sm ms-2"
+                  onclick="return confirm('Bạn có chắc chắn muốn xóa xe này?')">
+                    <i class="fas fa-trash-alt me-2"></i>Xóa xe
+                </a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <nav aria-label="Car pagination" class="mt-5">
+    <ul class="pagination justify-content-center" id="paginationControls">
+      </ul>
+  </nav>
+</div>
+
+<div class="modal fade" id="bookingModal" tabindex="-1" aria-labelledby="bookingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius: 20px">
+      <div class="modal-header bg-primary text-white border-0" style="border-radius: 20px 20px 0 0">
+        <h5 class="modal-title fw-bold" id="bookingModalLabel">
+          Xác nhận thông tin đặt xe
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="bookingForm" action="{% url 'book_car' %}" method="POST">
+        {% csrf_token %}
+        <div class="modal-body p-4">
+          <input type="hidden" name="car_id" id="modalCarId" />
+          <input type="hidden" name="car_type_id" value="{{ type.id }}" />
+
+          <div class="alert alert-info border-0 shadow-sm mb-4" style="border-radius: 12px">
+            <h6 class="fw-bold mb-1"><i class="fas fa-car me-2"></i>Thông tin xe:</h6>
+            <div id="modalCarInfo" class="small"></div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-uppercase">Họ và tên người nhận</label>
+            <input type="text" name="full_name" class="form-control" placeholder="Nhập họ và tên" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-uppercase">Số điện thoại liên hệ</label>
+            <input type="tel" name="phone_number" class="form-control" placeholder="Nhập số điện thoại" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-uppercase">Email nhận thông báo</label>
+            <input type="email" name="email" class="form-control" placeholder="Nhập địa chỉ email" required />
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold small text-uppercase">Ngày nhận xe</label>
+              <input type="date" name="book_date" class="form-control" required />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold small text-uppercase">Giờ nhận xe</label>
+              <input type="time" name="book_time" class="form-control" required />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 p-4 pt-0">
+          <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">Xác nhận đặt ngay</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="successModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center border-0 shadow" style="border-radius: 20px">
+      <div class="modal-body p-5">
+        <div class="mb-4">
+          <i class="fas fa-check-circle text-success fa-5x"></i>
+        </div>
+        <h3 class="fw-bold mb-3">Đặt xe thành công!</h3>
+        <p class="text-muted mb-4">
+          Đơn hàng của bạn đang được hệ thống xử lý. Vui lòng chờ quản trị viên xác nhận thông tin.
+        </p>
+        <button type="button" class="btn btn-success rounded-pill px-5 py-2" data-bs-dismiss="modal">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentPage = 1;
+  const itemsPerPage = 3;
+
+  function setCarData(id, plate, brand) {
+    document.getElementById("modalCarId").value = id;
+    document.getElementById("modalCarInfo").innerHTML = `
+        <span class="d-block"><strong>Hãng xe:</strong> ${brand}</span>
+        <span class="d-block"><strong>Biển số:</strong> ${plate}</span>
+    `;
+  }
+
+  // LOGIC PHÂN TRANG VÀ TÌM KIẾM
+  function applyPagination() {
+    const filter = document.getElementById('brandSearch').value.toLowerCase();
+    const carCards = Array.from(document.querySelectorAll('.car-card'));
+    
+    // 1. Lọc xe theo tìm kiếm
+    const filteredCars = carCards.filter(card => {
+      const brand = card.getAttribute('data-brand').toLowerCase();
+      return brand.includes(filter);
+    });
+
+    const totalPages = Math.ceil(filteredCars.length / itemsPerPage);
+    if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+
+    // 2. Hiển thị/Ẩn xe theo trang hiện tại
+    carCards.forEach(card => card.style.display = 'none'); // Ẩn hết
+    
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    
+    filteredCars.slice(start, end).forEach(card => {
+      card.style.display = 'block';
+    });
+
+    // 3. Render các nút điều hướng
+    renderControls(totalPages);
+  }
+
+  function renderControls(totalPages) {
+    const controls = document.getElementById('paginationControls');
+    controls.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    // Nút Trước
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage - 1})"><i class="fas fa-chevron-left"></i></a>`;
+    controls.appendChild(prevLi);
+
+    // Các ô số trang
+    for (let i = 1; i <= totalPages; i++) {
+      const li = document.createElement('li');
+      li.className = `page-item ${currentPage === i ? 'active' : ''}`;
+      li.innerHTML = `<a class="page-link shadow-sm mx-1 rounded" href="#" onclick="changePage(${i})">${i}</a>`;
+      controls.appendChild(li);
+    }
+
+    // Nút Sau
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage + 1})"><i class="fas fa-chevron-right"></i></a>`;
+    controls.appendChild(nextLi);
+  }
+
+  function changePage(page) {
+    event.preventDefault();
+    currentPage = page;
+    applyPagination();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Sự kiện tìm kiếm
+  document.getElementById('brandSearch').addEventListener('keyup', function() {
+    currentPage = 1; // Reset về trang 1 khi tìm kiếm
+    applyPagination();
+  });
+
+  // Khởi tạo lần đầu
+  document.addEventListener('DOMContentLoaded', applyPagination);
+
+  // Xử lý gửi Form bằng AJAX (Giữ nguyên)
+  document.getElementById("bookingForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const form = this;
+    const formData = new FormData(form);
+    const actionUrl = form.getAttribute("action");
+
+    fetch(actionUrl, {
+      method: "POST",
+      body: formData,
+      headers: {
+        "X-CSRFToken": formData.get("csrfmiddlewaretoken"),
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.status === "success") {
+          bootstrap.Modal.getInstance(document.getElementById("bookingModal")).hide();
+          new bootstrap.Modal(document.getElementById("successModal")).show();
+        } else {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Thông báo',
+            text: 'Đã hết xe này, vui lòng chọn xe khác hoặc thử lại sau.',
+            confirmButtonColor: '#0d6efd'
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("Lỗi kết nối máy chủ.");
+      });
+  });
+  const phoneInput = document.getElementById('phone-number');
+    if (phoneInput) {
+      phoneInput.addEventListener('input', function() {
+          // 1. Chỉ giữ lại các chữ số
+          this.value = this.value.replace(/[^0-9]/g, '');
+
+          // 2. Nếu dài hơn 10 số, cắt bỏ phần thừa
+          if (this.value.length > 10) {
+              this.value = this.value.slice(0, 10);
+          }
+      });
+
+      // Chặn các phím không phải là số từ bàn phím
+      phoneInput.addEventListener('keydown', function(e) {
+          const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'];
+          if (!allowedKeys.includes(e.key) && isNaN(Number(e.key))) {
+              e.preventDefault();
+          }
+      });
+    }
+</script>
+
+<style>
+  .object-fit-cover { object-fit: cover; }
+  .car-card { transition: transform 0.2s; }
+  .car-card:hover { transform: translateY(-5px); }
+  
+  /* Style cho phân trang ô vuông */
+  .pagination .page-link {
+    border: none;
+    color: #495057;
+    padding: 10px 15px;
+    font-weight: bold;
+    transition: all 0.3s;
+  }
+  .pagination .page-item.active .page-link {
+    background-color: #0d6efd;
+    color: white;
+  }
+  .pagination .page-item.disabled .page-link {
+    background-color: #f8f9fa;
+    color: #dee2e6;
+  }
+</style>
+{% endblock %}

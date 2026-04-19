@@ -1,0 +1,64 @@
+{% extends 'rental/base.html' %} {% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card shadow">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Thông tin trạm: {{ station.name }}</h5>
+          <span class="badge bg-light text-primary">
+            {{ current_count }}/{{ station.capacity }} Xe
+          </span>
+        </div>
+
+        <div class="card-body border-bottom bg-light">
+          <p class="small mb-1 text-muted">Tình trạng bãi đỗ:</p>
+          <div class="progress" style="height: 15px">
+            <div class="progress-bar {% if is_full %}bg-danger{% else %}bg-success{% endif %}"
+              role="progressbar"
+              style="width: {% widthratio current_count station.capacity 100 %}%">
+            </div>
+          </div>
+          {% if is_full %}
+          <small class="text-danger fw-bold">Trạm đã hết chỗ đỗ!</small>
+          {% else %}
+          <small class="text-success">Còn trống {{ available_slots }} chỗ</small>
+          {% endif %}
+        </div>
+
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item bg-dark text-white py-1 small">
+            DANH SÁCH MẪU XE TẠI TRẠM:
+          </li>
+          {% for item in inventory %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ item.brand_name }}</strong>
+              <span class="text-muted">- {{ item.car_type__name }}</span>
+            </div>
+            <span class="badge bg-info text-dark rounded-pill">
+              {{ item.total }} xe
+            </span>
+          </li>
+          {% empty %}
+          <li class="list-group-item text-center text-muted py-4">
+            <i class="fas fa-car-side fa-2x mb-2"></i><br />
+            Trạm hiện đang trống xe
+          </li>
+          {% endfor %}
+        </ul>
+
+        <div class="card-footer text-center">
+          <a href="{% url 'station_list' %}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Quay lại
+          </a>
+          {% if inventory %}
+          <a href="{% url 'car_types' %}" class="btn btn-primary btn-sm">
+            Thuê xe ngay
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

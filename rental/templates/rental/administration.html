@@ -1,0 +1,42 @@
+{% extends 'rental/base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Quản trị hệ thống</h2>
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-primary">
+                <div class="card-body text-center">
+                    <i class="fas fa-users-cog fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title">Quản lý tài khoản</h5>
+                    <p class="card-text text-muted">Quản lý danh sách người dùng, phân quyền và trạng thái tài khoản.</p>
+                    <a href="{% url 'account_management' %}" class="btn btn-primary w-100">Truy cập</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-success">
+                <div class="card-body text-center">
+                    <i class="fas fa-history fa-3x text-success mb-3"></i>
+                    <h5 class="card-title">Lịch sử đặt xe</h5>
+                    <p class="card-text text-muted">Xem danh sách các đơn đặt xe và trạng thái di chuyển.</p>
+                    <a href="{% url 'booking_history' %}" class="btn btn-success w-100">Truy cập</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-warning">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-bar fa-3x text-warning mb-3"></i>
+                    <h5 class="card-title">Thống kê doanh thu</h5>
+                    <p class="card-text text-muted">Xem báo cáo doanh thu theo thời gian và sơ đồ tăng trưởng.</p>
+                    <a href="{% url 'revenue_statistics' %}" class="btn btn-warning w-100 text-white">Xem chi tiết</a>
+                </div>
+            </div>
+        </div>
+        <div class="mb-5"></div>
+        <div></div>
+    </div>
+</div>
+{% endblock %}

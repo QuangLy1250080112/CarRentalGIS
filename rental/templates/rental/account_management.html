@@ -1,0 +1,204 @@
+{% extends 'rental/base.html' %}
+    {% if request.session.user_id %}
+        {% if request.session.role == 'admin' %}
+            {% block content %}
+            <div class="container mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>Quản lý tài khoản người dùng</h2>
+                    <button class="btn btn-primary shadow-sm" data-bs-toggle="collapse" data-bs-target="#addAccountForm">
+                        <i class="fas fa-plus me-1"></i> Thêm tài khoản mới
+                    </button>
+                </div>
+
+                <div class="collapse mb-4" id="addAccountForm">
+                    <div class="card card-body shadow-sm">
+                        <form method="POST">
+                            {% csrf_token %}
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <input type="text" name="new_username" class="form-control" placeholder="Tên đăng nhập" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="password" name="new_password" class="form-control" placeholder="Mật khẩu" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="text" name="new_irl_name" class="form-control" placeholder="Họ và tên" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <select name="new_role" class="form-select">
+                                        <option value="guest">Guest</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <button type="submit" name="add_user" class="btn btn-success w-100">Lưu</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="table-responsive shadow-sm rounded mb-5">
+                    <table class="table table-hover align-middle bg-white">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Họ và Tên</th>
+                                <th>Vai trò</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td>{{ u.id }}</td>
+                                <td class="fw-bold">{{ u.username }}</td>
+                                <td>{{ u.IRL_name }}</td>
+                                <td>
+                                    <span class="badge {% if u.role == 'admin' %}bg-danger{% else %}bg-info{% endif %}">
+                                        {{ u.role|upper }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-warning me-1" 
+                                            data-bs-toggle="modal" data-bs-target="#editUserModal"
+                                            onclick="editUser('{{ u.id }}', '{{ u.username }}', '{{ u.IRL_name }}', '{{ u.role }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <a href="{% url 'delete_user' u.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Xác nhận xóa tài khoản này?')">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-5">
+
+                <h2 class="mb-3 text-primary">Quản lý hóa đơn đặt xe</h2>
+                <div class="table-responsive shadow-sm rounded">
+                    <table class="table table-bordered align-middle bg-white">
+                        <thead class="table-secondary text-center">
+                            <tr>
+                                <th>Khách hàng</th>
+                                <th>Vai trò</th>
+                                <th>Liên hệ (Email/SĐT)</th>
+                                <th>Ngày đăng ký đơn</th> <th>Ngày hẹn nhận xe</th> <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            {% if u.book_day %}
+                            <tr>
+                                <td>
+                                    <strong>{{ u.IRL_name }}</strong><br>
+                                    <small class="text-muted">@{{ u.username }}</small>
+                                </td>
+                                <td class="text-center">{{ u.role }}</td>
+                                <td>
+                                    <i class="fas fa-envelope text-primary me-1"></i> {{ u.email|default:"-" }}<br>
+                                    <i class="fas fa-phone text-success me-1"></i> {{ u.phone_number|default:"-" }}
+                                </td>
+                                <td class="text-center small">
+                                    {{ u.book_day|date:"d/m/Y H:i" }}
+                                </td>
+                                <td class="text-center fw-bold text-primary">
+                                    {{ u.pickup_day|date:"d/m/Y H:i"|default:"-" }}
+                                </td>
+                                <td class="text-center">
+                                    {% if u.order_status == 'confirmed' %}
+                                        <span class="badge bg-success">Đã xác nhận</span>
+                                    {% elif u.order_status == 'cancelled' %}
+                                        <span class="badge bg-secondary">Đã hủy</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Chờ xử lý</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group">
+                                        {% if u.order_status == 'pending' or not u.order_status %}
+                                            <a href="{% url 'update_order_status' u.id 'confirmed' %}" class="btn btn-sm btn-success">Xác nhận</a>
+                                            <a href="{% url 'update_order_status' u.id 'cancelled' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Hủy đơn đặt xe này?')">Hủy</a>
+                                        {% else %}
+                                            <a href="{% url 'delete_order' u.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Xóa lịch sử và làm sạch thông tin đặt xe này?')">
+                                                <i class="fas fa-trash-alt me-1"></i> Xóa đơn
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal fade" id="editUserModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form id="editUserForm" method="POST" action="{% url 'upsert_user' %}">
+                            {% csrf_token %}
+                            <div class="modal-header">
+                                <h5 class="modal-title">Sửa thông tin người dùng</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="user_id" id="edit_user_id">
+                                <div class="mb-3">
+                                    <label class="form-label">Tên đăng nhập</label>
+                                    <input type="text" name="username" id="edit_username" class="form-control" readonly>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Họ và Tên</label>
+                                    <input type="text" name="irl_name" id="edit_irl_name" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Vai trò</label>
+                                    <select name="role" id="edit_role" class="form-select">
+                                        <option value="guest">Guest</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                                <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                function editUser(id, username, irl_name, role) {
+                    document.getElementById('edit_user_id').value = id;
+                    document.getElementById('edit_username').value = username;
+                    document.getElementById('edit_irl_name').value = irl_name;
+                    document.getElementById('edit_role').value = role;
+                }
+
+                document.getElementById('editUserForm').onsubmit = function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    fetch(this.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                    }).then(response => response.json())
+                    .then(data => {
+                        if(data.status === 'success') {
+                            location.reload();
+                        } else {
+                            alert("Lỗi: " + data.message);
+                        }
+                    });
+                };
+            </script>
+            {% endblock %}
+        {% endif %}
+    {% endif %}

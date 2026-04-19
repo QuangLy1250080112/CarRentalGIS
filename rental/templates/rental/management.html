@@ -1,0 +1,334 @@
+{% extends 'rental/base.html' %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<style>
+    #map-mgmt { height: 500px; width: 100%; border-radius: 12px; border: 2px solid #ddd; }
+    .stats-panel { background: #f8f9fa; padding: 15px; display: none; border-radius: 8px; margin-top: 10px; }
+    /* Đảm bảo datalist hiển thị tốt trên mobile */
+    #address-suggestions { width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div id="map-mgmt"></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm p-3">
+            <h5 class="fw-bold"><i class="fas fa-route"></i> Tìm đường ngắn nhất</h5>
+            <p class="text-muted small">Chọn xe, click lên bản đồ hoặc nhập địa chỉ để đặt điểm đến.</p>
+            
+            <div class="mb-3">
+                <label class="form-label">Chọn xe:</label>
+                <select id="car-select" class="form-select">
+                    <option value="">-- Chọn xe --</option>
+                    {% for car in cars %}
+                    <option value="{{ car.id }}" 
+                            data-plate="{{ car.license_plate }}" 
+                            data-lat="{{ car.current_location.y }}" 
+                            data-lng="{{ car.current_location.x }}">
+                        {% if forloop.counter0|add:0 == 0 %}🔵{% elif forloop.counter0|add:0 == 1 %}🟢{% elif forloop.counter0|add:0 == 2 %}🟡{% elif forloop.counter0|add:0 == 3 %}🟣{% elif forloop.counter0|add:0 == 4 %}🟠{% elif forloop.counter0|add:0 == 5 %}⚫{% else %}⚪{% endif %}
+                        {{ car.license_plate }} - {{ car.brand_name|default:"Chưa xác định" }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Địa chỉ điểm đến:</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+                    <input type="text" id="address-input" class="form-control" list="address-suggestions" placeholder="Nhập địa chỉ..." autocomplete="off">
+                    <datalist id="address-suggestions"></datalist>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Tọa độ điểm đến:</label>
+                <div class="input-group mb-2">
+                    <span class="input-group-text">Lat</span>
+                    <input type="number" step="any" id="target-lat" class="form-control" placeholder="10.771" min="0">
+                </div>
+                <div class="input-group">
+                    <span class="input-group-text">Lon</span>
+                    <input type="number" step="any" id="target-lon" class="form-control" placeholder="106.698" min="0">
+                </div>
+            </div>
+
+            <button class="btn btn-primary w-100 mb-2" onclick="runSimulation()">
+                <i class="fas fa-play"></i> Bắt đầu di chuyển
+            </button>
+
+            <div id="stats-info" class="stats-panel border">
+                <h6 class="fw-bold text-primary mb-2" id="display-plate">Xe: ---</h6>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Quãng đường:</span>
+                    <span class="fw-bold"><span id="res_km">0</span> km</span>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Tiền tạm tính:</span>
+                    <span class="fw-bold text-danger"><span id="res_total">0</span> VNĐ</span>
+                </div>
+                <hr>
+                <p id="zone-status" class="small mb-0 text-center"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const startLat = 10.771, startLon = 106.698;
+    const map = L.map('map-mgmt').setView([startLat, startLon], 14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(map);
+
+    L.circle([startLat, startLon], {
+        color: '#28a745',
+        fillColor: '#28a745',
+        fillOpacity: 0.2,
+        radius: {{ SAFE_RADIUS|default:5000 }}
+    }).addTo(map);
+
+    const colors = ['blue', 'green', 'gold', 'violet', 'orange', 'black', 'grey'];
+    function getIcon(color) {
+        return L.icon({
+            iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+    }
+
+    const redIcon = getIcon('red');
+    let carMarkers = {};
+    let carPaths = {};
+    let destMarker = null;
+    let targetLat = null, targetLon = null;
+    let currentCarId = null;
+    let routeControl = null; 
+    let routeCoordinates = [];
+
+    {% for car in cars %}
+    (function() {
+        const cId = "{{ car.id }}";
+        const cPlate = "{{ car.license_plate }}";
+        const cLat = {{ car.current_location.y|default:10.771 }};
+        const cLng = {{ car.current_location.x|default:106.698 }};
+        const color = colors[{{ forloop.counter0 }} % colors.length];
+
+        carMarkers[cId] = L.marker([cLat, cLng], { icon: getIcon(color) })
+            .addTo(map)
+            .bindTooltip(cPlate, { permanent: false, direction: 'top' });
+
+        carPaths[cId] = L.polyline([[cLat, cLng]], {
+            color: color,
+            weight: 4,
+            opacity: 0.6
+        }).addTo(map);
+    })();
+    {% endfor %}
+
+    function updateDestMarker(lat, lon) {
+        if (!isNaN(lat) && !isNaN(lon)) {
+            targetLat = lat;
+            targetLon = lon;
+            if (destMarker) map.removeLayer(destMarker);
+            destMarker = L.marker([lat, lon], { icon: redIcon }).addTo(map);
+            map.panTo([lat, lon]);
+        }
+    }
+
+    // --- LOGIC GỢI Ý ĐỊA CHỈ (AUTOCOMPLETE) ---
+    function searchAddress(query) {
+        return fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
+            .then(res => res.json());
+    }
+
+    function reverseGeocode(lat, lon) {
+        return fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`)
+            .then(res => res.json());
+    }
+    const addressInput = document.getElementById('address-input');
+    const suggestionsList = document.getElementById('address-suggestions');
+    let searchTimeout = null;
+
+    addressInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value;
+        if (query.length < 3) return;
+
+        searchTimeout = setTimeout(() => {
+            searchAddress(query).then(data => {
+                suggestionsList.innerHTML = '';
+
+                data.features.forEach(f => {
+                    const option = document.createElement('option');
+                    option.value = f.properties.name + ", " + (f.properties.city || "");
+                    option.dataset.lat = f.geometry.coordinates[1];
+                    option.dataset.lon = f.geometry.coordinates[0];
+                    suggestionsList.appendChild(option);
+                });
+            });
+        }, 300);
+    });
+    // Khi người dùng chọn từ gợi ý hoặc nhấn Enter/Tab ra ngoài
+    addressInput.addEventListener('change', function() {
+        const selected = [...suggestionsList.options].find(opt => opt.value === this.value);
+        if (!selected) return;
+
+        targetLat = parseFloat(selected.dataset.lat);
+        targetLon = parseFloat(selected.dataset.lon);
+
+        document.getElementById('target-lat').value = targetLat.toFixed(6);
+        document.getElementById('target-lon').value = targetLon.toFixed(6);
+
+        updateDestMarker(targetLat, targetLon);
+    });
+
+    // --- LOGIC CLICK BẢN ĐỒ: GHIM & LẤY ĐỊA CHỈ ---
+    map.on('click', function(e) {
+        targetLat = e.latlng.lat;
+        targetLon = e.latlng.lng;
+
+        document.getElementById('target-lat').value = targetLat.toFixed(6);
+        document.getElementById('target-lon').value = targetLon.toFixed(6);
+
+        reverseGeocode(targetLat, targetLon).then(data => {
+            if (data.features.length > 0) {
+                addressInput.value = data.features[0].properties.name || "Không rõ địa chỉ";
+            }
+        });
+
+        updateDestMarker(targetLat, targetLon);
+    });
+
+    // Xử lý thay đổi tọa độ thủ công
+    ['target-lat', 'target-lon'].forEach(id => {
+        document.getElementById(id).addEventListener('input', function() {
+            const lat = parseFloat(document.getElementById('target-lat').value);
+            const lon = parseFloat(document.getElementById('target-lon').value);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                updateDestMarker(lat, lon);
+            }
+        });
+    });
+
+    document.getElementById('car-select').addEventListener('change', function() {
+        currentCarId = this.value;
+        if (!currentCarId) {
+            document.getElementById('stats-info').style.display = 'none';
+            return;
+        }
+        const selectedOption = this.options[this.selectedIndex];
+        document.getElementById('display-plate').innerText = "Xe: " + selectedOption.getAttribute('data-plate');
+        document.getElementById('stats-info').style.display = 'block';
+
+        const marker = carMarkers[currentCarId];
+        if (marker) {
+            map.setView(marker.getLatLng(), 14, { animate: true });
+            marker.openTooltip();
+        }
+    });
+
+    function runSimulation() {
+        if (!currentCarId || targetLat === null || targetLon === null) {
+            alert("Vui lòng chọn xe và chọn điểm đến!");
+            return;
+        }
+        const startPos = carMarkers[currentCarId].getLatLng();
+        if (routeControl) map.removeControl(routeControl);
+
+        routeControl = L.Routing.control({
+            waypoints: [
+                L.latLng(startPos.lat, startPos.lng),
+                L.latLng(targetLat, targetLon)
+            ],
+            routeWhileDragging: false,
+            addWaypoints: false,
+            createMarker: function() { return null; }
+        }).on('routesfound', function(e) {
+            routeCoordinates = e.routes[0].coordinates;
+            simulateStep();
+        }).addTo(map);
+    }
+
+    function simulateStep() {
+        if (routeCoordinates.length === 0) return;
+
+        const nextPoint = routeCoordinates.shift(); 
+        const url = `/api/simulate/?car_id=${currentCarId}&lat=${nextPoint.lat}&lon=${nextPoint.lng}`;
+        
+        fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'error') { alert(data.message); return; }
+
+            const marker = carMarkers[currentCarId];
+            const polyline = carPaths[currentCarId];
+            const newPos = [data.new_lat, data.new_lng];
+            
+            marker.setLatLng(newPos);
+            polyline.addLatLng(newPos);
+            map.panTo(newPos);
+
+            document.getElementById('res_km').innerText = data.new_km.toFixed(2);
+            document.getElementById('res_total').innerText = Math.round(data.new_fee).toLocaleString();
+            checkZone({lat: data.new_lat, lng: data.new_lng});
+            
+            setTimeout(simulateStep, 200);
+        });
+    }
+
+    function checkZone(pos) {
+        const dist = map.distance([pos.lat, pos.lng], [startLat, startLon]);
+        const label = document.getElementById('zone-status');
+        if (dist > 5000) {
+            label.innerHTML = '<span class="text-danger fw-bold"><i class="fas fa-exclamation-triangle"></i> NGOÀI VÙNG AN TOÀN!</span>';
+        } else {
+            label.innerHTML = '<span class="text-success fw-bold"><i class="fas fa-check-circle"></i> Trong vùng an toàn</span>';
+        }
+    }
+
+    const zonesData = {{ zones_data|safe|default:"[]" }};
+    zonesData.forEach(zone => {
+        L.polygon(zone.coords, {
+            color: '#28a745',
+            fillColor: '#28a745',
+            fillOpacity: 0.15,
+            dashArray: '5, 10'
+        }).addTo(map).bindTooltip("Vùng an toàn: " + zone.name);
+    });
+    
+    const latInput = document.getElementById('target-lat');
+    const lonInput = document.getElementById('target-lon');
+
+    [latInput, lonInput].forEach(input => {
+        if (input) {
+            // Chặn dấu trừ (-) và chữ 'e' ngay khi nhấn phím
+            input.addEventListener('keydown', function(e) {
+                if (e.key === '-' || e.key === 'e') {
+                    e.preventDefault();
+                }
+            });
+
+            // Nếu lỡ dán (paste) số âm vào, tự động biến nó thành số dương hoặc 0
+            input.addEventListener('input', function() {
+                if (this.value < 0) {
+                    this.value = Math.abs(this.value); // Hoặc đổi thành = 0 
+                }
+            });
+        }
+    });
+
+</script>
+{% endblock %}

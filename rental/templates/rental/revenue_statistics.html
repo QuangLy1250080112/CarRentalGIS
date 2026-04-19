@@ -1,0 +1,117 @@
+{% extends 'rental/base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2> Thống kê doanh thu</h2>
+        <div>
+            <a href="{% url 'export_revenue_excel' %}?start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-success me-2">
+                <i class="fas fa-file-excel"></i> Xuất dữ liệu Excel
+            </a>
+            <a href="{% url 'administration' %}" class="btn btn-secondary">Quay lại</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Thời gian</label>
+                    <select name="filter" class="form-select" onchange="toggleCustomDate(this.value)">
+                        <option value="today" {% if filter_type == 'today' %}selected{% endif %}>Hôm nay</option>
+                        <option value="7days" {% if filter_type == '7days' %}selected{% endif %}>7 ngày qua</option>
+                        <option value="30days" {% if filter_type == '30days' %}selected{% endif %}>30 ngày qua</option>
+                        <option value="custom" {% if filter_type == 'custom' %}selected{% endif %}>Tùy chỉnh...</option>
+                    </select>
+                </div>
+                <div id="custom-date-range" class="col-md-6 {% if filter_type != 'custom' %}d-none{% endif %}">
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label small">Từ ngày</label>
+                            <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                        </div>
+                        <div class="col">
+                            <label class="form-label small">Đến ngày</label>
+                            <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Lọc dữ liệu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card text-white bg-success mb-3 shadow">
+                <div class="card-body text-center">
+                    <h5 class="card-title">TỔNG DOANH THU</h5>
+                    <h2 class="fw-bold">{{ total_revenue|floatformat:0 }} VNĐ</h2>
+                    <p class="mb-0 small text-white-50">Dựa trên các chuyến đi đã hoàn thành</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-bold">Sơ đồ doanh thu theo ngày</div>
+                <div class="card-body">
+                    <canvas id="revenueChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function toggleCustomDate(val) {
+        const range = document.getElementById('custom-date-range');
+        if (val === 'custom') range.classList.remove('d-none');
+        else range.classList.add('d-none');
+    }
+
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    
+    // Lấy dữ liệu từ Django
+    const labels = [{% for item in processed_data %}"{{ item.date|date:'d/m' }}",{% endfor %}];
+    const dataValues = [{% for item in processed_data %}{{ item.total }},{% endfor %}];
+
+    // Tạo mảng màu ngẫu nhiên cho từng cột
+    const colors = dataValues.map(() => `hsla(${Math.random() * 360}, 70%, 60%, 0.8)`);
+
+    new Chart(ctx, {
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    type: 'line', // Thêm sơ đồ đường
+                    label: 'Xu hướng doanh thu',
+                    data: dataValues,
+                    borderColor: '#FF5733',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3,
+                    pointBackgroundColor: '#FF5733',
+                    order: 1 // Hiển thị phía trên
+                },
+                {
+                    type: 'bar', // Sơ đồ cột
+                    label: 'Doanh thu ngày (VNĐ)',
+                    data: dataValues,
+                    backgroundColor: colors, // Mỗi cột một màu
+                    borderWidth: 1,
+                    order: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

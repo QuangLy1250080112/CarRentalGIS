@@ -1,0 +1,8 @@
+.leaflet-tile-container img {
+    display: block;
+}
+
+/* Khi bản đồ bị chặn, nó sẽ không hiện chữ báo lỗi lung tung nữa */
+.leaflet-tile-pane img[src*="openstreetmap.org"] {
+    visibility: hidden;
+}

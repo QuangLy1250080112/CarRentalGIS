@@ -1,0 +1,65 @@
+{% extends 'rental/base.html' %} {% block content %}
+<div class="row align-items-center py-5">
+  <div class="col-md-6">
+    <h1 class="display-4 fw-bold text-dark">Hệ thống thuê xe trực tuyến</h1>
+    <p class="lead text-secondary">
+      Nền tảng thuê xe nhanh chóng, tiện lợi và đáng tin cậy. Bạn có thể dễ dàng
+      tìm kiếm, lựa chọn và đặt xe phù hợp với nhu cầu chỉ trong vài bước, giúp
+      tiết kiệm thời gian, đảm bảo minh bạch thông tin và mang lại trải nghiệm
+      thuê xe đơn giản, hiện đại.
+    </p>
+    <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+      <a
+        href="{% url 'car_types' %}"
+        class="btn btn-primary btn-lg px-4 me-md-2"
+        >Đặt xe ngay</a
+      >
+      {% if request.session.user_id %} {% if request.session.role == 'admin' %}
+      <a
+        href="{% url 'dashboard' %}"
+        class="btn btn-outline-secondary btn-lg px-4"
+        >Giám sát GIS</a
+      >
+      {% endif %} {% endif %}
+    </div>
+  </div>
+  <div class="col-md-6 mt-4 mt-md-0">
+    <img
+      src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80"
+      class="img-fluid rounded-3 shadow-lg"
+      alt="Car Rental"
+    />
+  </div>
+</div>
+
+<div class="row text-center mt-5">
+  <div class="col-md-4">
+    <div class="p-3">
+      <h3 class="h5">Nhiều loại xe đa dạng</h3>
+      <p class="text-muted">
+        Cung cấp nhiều loại xe từ xe máy, xe ô tô đến xe du lịch. Phù hợp cho
+        nhu cầu cá nhân, gia đình hoặc công việc.
+      </p>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="p-3">
+      <h3 class="h5">Đặt xe nhanh chóng</h3>
+      <p class="text-muted">
+        Giao diện đơn giản, dễ sử dụng. Bạn có thể đặt xe chỉ trong vài bước mà
+        không cần thủ tục phức tạp.
+      </p>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="p-3">
+      <h3 class="h5">Thông tin minh bạch</h3>
+      <p class="text-muted">
+        Hiển thị đầy đủ thông tin xe và giá thuê. Giúp bạn dễ dàng lựa chọn và
+        quản lý đơn thuê của mình.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

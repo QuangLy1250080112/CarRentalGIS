@@ -1,0 +1,30 @@
+{% extends 'rental/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <h2 class="mb-4 fw-bold">Về Chúng Tôi</h2>
+            <p class="text-muted fs-5 mb-5">
+                Dự án Website Thuê Xe được phát triển nhằm cung cấp giải pháp đặt xe trực tuyến tiện lợi, giúp người dùng dễ dàng tìm kiếm, lựa chọn và thuê xe phù hợp với nhu cầu cá nhân hoặc công việc.
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-4 border-top pt-5">
+        <div class="col-md-6">
+            <h4>Sứ mệnh của chúng tôi</h4>
+            <p>Mục tiêu của hệ thống là xây dựng một nền tảng thuê xe hiện đại, nơi người dùng có thể nhanh chóng xem thông tin xe, kiểm tra tình trạng sẵn sàng và thực hiện đặt xe một cách thuận tiện.</p>
+        </div>
+        <div class="col-md-6">
+            <h4>Công cụ tích hợp</h4>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">📍 <b>Leaflet JS:</b> Hiển thị bản đồ số linh hoạt.</li>
+                <li class="list-group-item">🛰️ <b>PostGIS:</b> Lưu trữ dữ liệu không gian mạnh mẽ.</li>
+                <li class="list-group-item">🛡️ <b>Geofencing:</b> Thiết lập vùng an toàn cho xe.</li>
+                <li class="list-group-item">📊 <b>Analytics:</b> Thống kê quãng đường và phí vượt hạn mức.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

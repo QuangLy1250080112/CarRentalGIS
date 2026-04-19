@@ -1,0 +1,314 @@
+{% extends 'rental/base.html' %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+    /* Layout chính */
+    .dashboard-container { display: flex; height: calc(100vh - 100px); gap: 20px; }
+    .car-list-panel { 
+        width: 350px;
+        overflow-y: auto; 
+        padding-right: 10px; 
+        scrollbar-width: thin; 
+        display: flex;
+        flex-direction: column;
+    }
+    #map-dash { 
+        flex: 1;
+        border-radius: 15px; 
+        border: 1px solid #ddd;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        z-index: 1;
+    }
+
+    /* Thẻ xe */
+    .car-card { 
+        background: white;
+        border-radius: 12px; padding: 15px; 
+        margin-bottom: 15px; border: 1px solid #eee; transition: all 0.3s;
+        cursor: pointer; position: relative; overflow: hidden;
+    }
+    .car-card:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); border-color: #0d6efd; }
+    .car-card.active { border-left: 5px solid #0d6efd; background: #f8fbff; }
+    
+    .car-img { width: 80px; height: 50px; object-fit: cover; border-radius: 6px; }
+    .status-badge { font-size: 0.7rem; padding: 3px 8px; border-radius: 10px; position: absolute; top: 10px; right: 10px; }
+    
+    /* Chỉ số phụ */
+    .stats-mini { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.85rem; color: #666; }
+    .fee-highlight { color: #dc3545; font-weight: 800; font-size: 1rem; background: #fff5f5; padding: 2px 8px; border-radius: 6px; border: 1px dashed #feb2b2; }
+    .stats-mini i { color: #0d6efd; margin-right: 3px; }
+
+    /* Custom Popup */
+    .leaflet-popup-content-wrapper { border-radius: 10px; padding: 5px; }
+    .btn-checkout { width: 100%; margin-top: 10px; border-radius: 8px; font-weight: 600; }
+
+    /* --- PHẦN THÊM MỚI: CSS PHÂN TRANG --- */
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        padding: 15px 0;
+    }
+    .page-btn {
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .page-btn:hover:not(.disabled) {
+        background: #f0f0f0;
+        border-color: #0d6efd;
+    }
+    .page-btn.active {
+        background: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    .page-btn.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="dashboard-container">
+        <div class="car-list-panel">
+            <h4 class="fw-bold mb-3">Danh sách xe</h4>
+            
+            <div id="car-items-wrapper">
+                {% for car in cars %}
+                <div class="car-card shadow-sm animate__animated animate__fadeInUp car-pagination-item" 
+                     onclick="focusCar({{ car.current_location.y }}, {{ car.current_location.x }}, '{{ car.license_plate }}')">
+        
+                    {% if car.total_km > 0 %}
+                        <span class="status-badge bg-success text-white">Đang hoạt động</span>
+                    {% else %}
+                        <span class="status-badge bg-secondary text-white">Không hoạt động</span>
+                    {% endif %}
+
+                    <div class="d-flex align-items-center gap-3">
+                        {% if car.image %}
+                            <img src="{{ car.image.url }}" class="car-img">
+                        {% else %}
+                           <div class="car-img bg-secondary d-flex align-items-center justify-content-center text-white">No Img</div>
+                        {% endif %}
+                        <div>
+                            <div class="fw-bold text-dark">{{ car.license_plate }}</div>
+                            <div class="text-muted small">{{ car.brand_name }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-mini">
+                        <span><i class="fas fa-road"></i> {{ car.total_km|default:"0" }} km</span>
+                        <span class="fee-highlight"><i class="fas fa-wallet"></i> {{ car.total_fee|floatformat:0 }}đ</span>
+                    </div>
+                    
+                    {% if car.total_km > 0 %}
+                    <button class="btn btn-outline-success btn-sm btn-checkout mt-2" 
+                            onclick="handleCheckout(event, {{ car.id }}, '{{ car.license_plate }}', '{{ car.brand_name }}', '{{ car.total_km }}', '{{ car.total_fee|floatformat:0 }}', '{{ car.base_fee|floatformat:0 }}', '{{ car.extra_fee|floatformat:0 }}', '{{ car.penalty_fee|default:0|floatformat:0 }}')">
+                        <i class="fas fa-check-circle"></i> Thanh toán
+                    </button>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-muted">Chưa có xe nào trong hệ thống.</p>
+                {% endfor %}
+            </div>
+
+            <div id="pagination-controls" class="pagination-container"></div>
+        </div>
+
+        <div id="map-dash"></div>
+    </div>
+</div>
+
+<script>
+    // --- GIỮ NGUYÊN LOGIC BẢN ĐỒ CŨ ---
+    var map = L.map('map-dash').setView([10.771, 106.698], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(map);
+    
+    L.circle({{ START_POINT|safe|default:"[10.771, 106.698]" }}, {
+        color: '#28a745',
+        fillColor: '#28a745',
+        fillOpacity: 0.2,
+        radius: {{ SAFE_RADIUS|default:5000 }}
+    }).addTo(map);
+
+    const carMarkers = {};
+
+    {% for car in cars %}
+    (function() {
+        const lat = {{ car.current_location.y }};
+        const lng = {{ car.current_location.x }};
+        const plate = "{{ car.license_plate }}";
+        
+        const marker = L.marker([lat, lng]).addTo(map)
+            .bindPopup(`
+                <div class="text-center">
+                    <h6 class="fw-bold mb-1">${plate}</h6>
+                    <p class="small text-muted mb-1">{{ car.brand_name }}</p>
+                    <hr class="my-1">
+                    <div class="small fw-bold text-primary">Tọa độ hiện tại:</div>
+                    <div class="small text-dark">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+                </div>
+            `);
+        carMarkers[plate] = marker;
+    })();
+    {% endfor %}
+
+    const zonesData = {{ zones_data|safe|default:"[]" }};
+    zonesData.forEach(zone => {
+        if(zone.coords) {
+            L.polygon(zone.coords, {
+                color: '#28a745',
+                fillColor: '#28a745',
+                fillOpacity: 0.2
+            }).addTo(map).bindTooltip("Vùng an toàn: " + zone.name);
+        }
+    });
+
+    function focusCar(lat, lng, plate) {
+        map.flyTo([lat, lng], 15);
+        if(carMarkers[plate]) carMarkers[plate].openPopup();
+    }
+
+    // --- GIỮ NGUYÊN LOGIC THANH TOÁN CŨ ---
+    function handleCheckout(event, carId, plate, brand, km, total, base_fee, extra_fee, penalty_fee) {
+        event.stopPropagation();
+        Swal.fire({
+            title: '<span style="color: #198754">XÁC NHẬN THANH TOÁN</span>',
+            html: `
+                <div class="text-start p-3 border rounded bg-light" style="font-size: 0.95rem">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Xe:</span> <span class="fw-bold">${plate}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Quãng đường:</span> <span class="fw-bold text-primary">${km} km</span>
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted small">Cước cơ bản (Base):</span> <span>${base_fee} đ</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted small">Phụ phí ngoại vi (Extra):</span> <span>${extra_fee} đ</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted small">Phí ngoại vùng (Penalty):</span> <span>${penalty_fee} đ</span>
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">TỔNG TIỀN:</span>
+                        <span class="fs-4 fw-bolder text-danger">${total} VNĐ</span>
+                    </div>
+                </div>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Thanh toán ngay',
+            cancelButtonText: 'Hủy',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                const formData = new FormData();
+                formData.append('car_id', carId);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                return fetch('/api/checkout-car/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(response.statusText);
+                    return response.json();
+                })
+                .catch(error => {
+                    Swal.showValidationMessage(`Yêu cầu thất bại: ${error}`);
+                });
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+            if (result.isConfirmed && result.value.status === 'success') {
+                Swal.fire({ title: 'Thành công!', text: 'Hóa đơn đã được lưu, xe đã về bãi.', icon: 'success' })
+                .then(() => location.reload());
+            } else if (result.isConfirmed) {
+                Swal.fire('Lỗi!', 'Không thể thực hiện thanh toán.', 'error');
+            }
+        });
+    }
+
+    // --- PHẦN THÊM MỚI: LOGIC PHÂN TRANG JAVASCRIPT ---
+    const itemsPerPage = 4;
+    let currentPage = 1;
+    const items = document.querySelectorAll('.car-pagination-item');
+    const totalPages = Math.ceil(items.length / itemsPerPage);
+
+    function updatePagination(page) {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+
+        // Ẩn/Hiện các box xe dựa trên trang
+        items.forEach((item, index) => {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            item.style.display = (index >= start && index < end) ? 'block' : 'none';
+        });
+
+        renderControls();
+    }
+
+    function renderControls() {
+        const container = document.getElementById('pagination-controls');
+        if (!container || totalPages <= 1) return;
+
+        let html = '';
+        
+        // Mũi tên lùi
+        html += `<div class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="updatePagination(${currentPage - 1})">
+                    <i class="fas fa-chevron-left"></i>
+                 </div>`;
+
+        // Các ô vuông số trang
+        for (let i = 1; i <= totalPages; i++) {
+            // Logic hiển thị: luôn hiện trang 1, trang cuối, và các trang lân cận trang hiện tại
+            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                html += `<div class="page-btn ${i === currentPage ? 'active' : ''}" onclick="updatePagination(${i})">${i}</div>`;
+            } else if (i === currentPage - 2 || i === currentPage + 2) {
+                html += `<div class="page-btn disabled">...</div>`;
+            }
+        }
+
+        // Mũi tên tiến
+        html += `<div class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="updatePagination(${currentPage + 1})">
+                    <i class="fas fa-chevron-right"></i>
+                 </div>`;
+
+        container.innerHTML = html;
+    }
+
+    // Chạy phân trang lần đầu khi load trang
+    document.addEventListener('DOMContentLoaded', () => {
+        updatePagination(1);
+    });
+
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+asgiref==3.11.1
+Django==6.0.2
+django-leaflet==0.33.0
+et_xmlfile==2.0.0
+geographiclib==2.1
+geopy==2.4.1
+openpyxl==3.1.5
+pillow==12.1.1
+psycopg2-binary==2.9.11
+sqlparse==0.5.5
+tzdata==2025.3
