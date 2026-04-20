@@ -17,6 +17,7 @@
             <th>Quãng đường</th>
             <th>Tổng tiền</th>
             <th>Trạng thái</th>
+            <th>Đánh giá của bạn</th>
           </tr>
         </thead>
         <tbody id="historyBody">
@@ -63,10 +64,17 @@
                 <span class="badge bg-success">Hoàn thành</span>
               {% endif %}
             </td>
+            <td>
+              <div class="review-cell" data-car-id="{{ h.car.id }}" data-history-id="{{ h.id }}">
+                <div class="spinner-border spinner-border-sm text-muted" role="status">
+                  <span class="visually-hidden">Đang tải...</span>
+                </div>
+              </div>
+            </td>
           </tr>
           {% empty %}
           <tr id="emptyRow">
-            <td colspan="6" class="text-center py-5 text-muted">
+            <td colspan="7" class="text-center py-5 text-muted">
               Bạn chưa có chuyến đi nào. <a href="{% url 'car_types' %}">Đặt xe ngay!</a>
             </td>
           </tr>
@@ -144,7 +152,72 @@
   }
 
   // Khởi tạo khi trang tải xong
-  document.addEventListener("DOMContentLoaded", updatePagination);
+  document.addEventListener("DOMContentLoaded", function() {
+    updatePagination();
+    loadReviewStatus();
+  });
+
+  // Hàm để tải trạng thái đánh giá cho mỗi booking
+  function loadReviewStatus() {
+    const reviewCells = document.querySelectorAll('.review-cell');
+    
+    reviewCells.forEach(cell => {
+      const carId = cell.getAttribute('data-car-id');
+      const historyId = cell.getAttribute('data-history-id');
+      
+      // Kiểm tra xem người dùng có thể review không
+      fetch(`/api/check-review/${carId}/`)
+        .then(res => res.json())
+        .then(data => {
+          console.log(`Review status for car ${carId}:`, data);
+          cell.innerHTML = '';
+          
+          if (data.can_review) {
+            // Hiển thị link đánh giá
+            const link = document.createElement('a');
+            link.href = `/car/${carId}/description/#reviews-section`;
+            link.className = 'btn btn-sm btn-outline-warning';
+            link.innerHTML = '<i class="fas fa-star me-1"></i>Đánh giá';
+            cell.appendChild(link);
+          } else if (data.reason === 'Bạn đã đánh giá xe này rồi') {
+            // Hiển thị số sao của review
+            fetch(`/api/reviews/${carId}/`)
+              .then(res => res.json())
+              .then(reviewsData => {
+                console.log(`Reviews for car ${carId}:`, reviewsData);
+                const reviews = reviewsData.reviews || [];
+                const userReview = reviews.find(r => r.id); // Tìm review đầu tiên (của người dùng hiện tại)
+                
+                if (userReview) {
+                  let starsHtml = '';
+                  for (let i = 1; i <= 5; i++) {
+                    if (i <= userReview.rating) {
+                      starsHtml += '<i class="fas fa-star text-warning"></i>';
+                    } else {
+                      starsHtml += '<i class="far fa-star text-muted"></i>';
+                    }
+                  }
+                  cell.innerHTML = `<span title="Bạn đã đánh giá ${userReview.rating} sao">${starsHtml}</span>`;
+                } else {
+                  cell.innerHTML = '<small class="text-muted">Chưa đánh giá</small>';
+                }
+              })
+              .catch(err => {
+                console.error(`Error loading reviews for car ${carId}:`, err);
+                cell.innerHTML = '<small class="text-muted">Chưa đánh giá</small>';
+              });
+          } else {
+            // Hiển thị lý do không thể đánh giá
+            cell.innerHTML = `<small class="text-muted" title="${data.reason}">${data.reason}</small>`;
+          }
+        })
+        .catch(err => {
+          console.error(`Error checking review for car ${carId}:`, err);
+          cell.innerHTML = '<small class="text-danger">Lỗi tải</small>';
+        });
+    });
+  }
+
 </script>
 
 <style>

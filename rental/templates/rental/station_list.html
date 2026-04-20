@@ -58,6 +58,69 @@
     .station-card { cursor: pointer; border-left: 5px solid #198754; margin-bottom: 10px; transition: 0.2s; }
     .station-card:hover { background: #f8f9fa; transform: translateX(5px); }
 
+    .btn-pill-gradient {
+        border: none;
+        border-radius: 999px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        box-shadow: 0 4px 14px rgba(13, 110, 253, 0.35);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 50%, #6610f2 100%);
+        color: #fff !important;
+    }
+    .btn-pill-gradient:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(13, 110, 253, 0.45);
+        color: #fff !important;
+    }
+    .btn-pill-gradient:active { transform: translateY(0); }
+
+    .btn-add-station-gradient {
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        padding: 0.35rem 0.75rem;
+        background: linear-gradient(135deg, #20c997 0%, #198754 100%);
+        color: #fff !important;
+        box-shadow: 0 3px 12px rgba(25, 135, 84, 0.35);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .btn-add-station-gradient:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 16px rgba(25, 135, 84, 0.45);
+        color: #fff !important;
+    }
+
+    .route-finder-box {
+        background: linear-gradient(180deg, #f8f9ff 0%, #fff 100%);
+        border: 1px solid #e0e7ff;
+        border-radius: 12px;
+        padding: 12px;
+    }
+    .route-finder-box .route-line-btn {
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        border: none;
+        background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+        color: #fff;
+        box-shadow: 0 3px 12px rgba(220, 53, 69, 0.3);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .route-finder-box .route-line-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 16px rgba(220, 53, 69, 0.4);
+        color: #fff;
+    }
+    .route-finder-box .route-line-btn-secondary {
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+        box-shadow: 0 3px 12px rgba(111, 66, 193, 0.3);
+    }
+    .route-finder-box .route-line-btn-secondary:hover {
+        box-shadow: 0 5px 16px rgba(111, 66, 193, 0.4);
+    }
+
     /* Style bổ sung cho Modal Map */
     #modalMap { height: 300px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #ddd; }
 </style>
@@ -67,8 +130,8 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0 fw-bold">Trạm Xe</h5>
                   {% if request.session.user_id and request.session.role == 'admin' %}
-                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addStationModal">
-                      <i class="fas fa-plus"></i> Thêm
+                    <button type="button" class="btn btn-sm btn-add-station-gradient" data-bs-toggle="modal" data-bs-target="#addStationModal">
+                      <i class="fas fa-plus me-1"></i>Thêm trạm
                     </button>
                   {% endif %}
 
@@ -136,14 +199,49 @@
             <input type="number" id="search-radius" class="form-control form-control-sm" value="2000" min="0" placeholder="Nhập bán kính...">
         </div>
 
-        <button id="btn-search-stations" class="btn btn-info text-white w-100 mb-3">
-            <i class="fas fa-search-location"></i> Tìm trạm
+        <button type="button" id="btn-search-stations" class="btn btn-pill-gradient w-100 mb-3 py-2">
+            <i class="fas fa-search-location me-2"></i>Tìm trạm gần điểm chọn
         </button>
 
         <hr>
-        <div id="nearby-results">
+        <div id="nearby-results" class="mb-3">
             <p class="text-muted small text-center">Chọn điểm trên bản đồ hoặc tìm địa chỉ để bắt đầu.</p>
         </div>
+        <hr>
+
+        <div class="route-finder-box mb-3">
+            <div class="small fw-bold text-secondary mb-2">
+                <i class="fas fa-route text-danger me-1"></i>Đường đi (OSRM)
+            </div>
+            <p class="small text-muted mb-2" style="line-height: 1.35;">
+                Xuất phát từ <strong class="text-danger">marker đỏ</strong> trên bản đồ nếu đã chọn điểm; nếu chưa chọn thì dùng điểm mặc định (Bến Thành).
+            </p>
+            <button type="button" id="btn-route-nearest" class="btn route-line-btn w-100 py-2 mb-2">
+                <i class="fas fa-location-arrow me-2"></i>Tìm đường tới trạm gần nhất
+            </button>
+            <label class="small fw-bold text-muted mb-1">Tìm đường tới trạm đã chọn</label>
+            <select id="route-target-station" class="form-select form-select-sm mb-2">
+                <option value="">— Chọn trạm —</option>
+                {% for st in stations_route %}
+                <option value="{{ st.id }}" data-lat="{{ st.lat }}" data-lng="{{ st.lng }}">{{ st.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="button" id="btn-route-selected" class="btn route-line-btn route-line-btn-secondary w-100 py-2">
+                <i class="fas fa-draw-polygon me-2"></i>Hiển thị đường đi
+            </button>
+            <button type="button" id="btn-route-clear" class="btn btn-link btn-sm text-muted w-100 mt-1 p-0">
+                <i class="fas fa-times-circle me-1"></i>Xóa đường vẽ trên bản đồ
+            </button>
+            <div id="route-info-box" class="mt-3 p-2 bg-light rounded border-left border-danger" style="display: none; border-left: 4px solid #dc3545;">
+                <div class="small fw-bold text-danger mb-1">
+                    <i class="fas fa-road me-1"></i>Thông tin đường đi
+                </div>
+                <div id="route-distance-text" class="small text-dark mb-1"></div>
+                <div id="route-duration-text" class="small text-muted"></div>
+            </div>
+        </div>
+
+        <hr>
     </div>
 </div>
 
@@ -193,8 +291,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-                    <button type="submit" class="btn btn-success">Lưu trạm</button>
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-add-station-gradient rounded-pill px-4">Lưu trạm</button>
                 </div>
             </form>
         </div>
@@ -202,6 +300,9 @@
 </div>
 
 <script>
+    const DEFAULT_ROUTE_LAT = {{ default_route_lat|default:"10.771" }};
+    const DEFAULT_ROUTE_LON = {{ default_route_lon|default:"106.698" }};
+
     // --- 1. KHỞI TẠO BẢN ĐỒ CHÍNH ---
     var map = L.map('map').setView([10.771, 106.698], 13);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -222,6 +323,102 @@
     var markers = [];
     let selectionMarker = null;
     let searchCircle = null;
+    let routePolyline = null;
+
+    function getRouteOriginLL() {
+        const la = parseFloat(document.getElementById('target-lat').value);
+        const lo = parseFloat(document.getElementById('target-lon').value);
+        if (!isNaN(la) && !isNaN(lo)) {
+            return { lat: la, lon: lo, usedDefault: false };
+        }
+        return { lat: DEFAULT_ROUTE_LAT, lon: DEFAULT_ROUTE_LON, usedDefault: true };
+    }
+
+    function clearRouteOnMap() {
+        if (routePolyline) {
+            map.removeLayer(routePolyline);
+            routePolyline = null;
+        }
+    }
+
+    async function showOSRMRoute(lat1, lon1, lat2, lon2, stationName = null) {
+        clearRouteOnMap();
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+            lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
+            '?overview=full&geometries=geojson';
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.code !== 'Ok' || !data.routes || !data.routes[0]) {
+                alert('Không lấy được lộ trình đường bộ (OSRM). Thử điểm khác hoặc trạm khác.');
+                return;
+            }
+            const geom = data.routes[0].geometry;
+            const latlngs = geom.coordinates.map(function (c) { return [c[1], c[0]]; });
+            routePolyline = L.polyline(latlngs, {
+                color: '#dc3545',
+                weight: 5,
+                opacity: 0.9,
+                lineJoin: 'round'
+            }).addTo(map);
+            map.fitBounds(routePolyline.getBounds(), { padding: [48, 48], maxZoom: 15 });
+            
+            // Hiển thị thông tin khoảng cách và thời gian
+            const distanceKm = (data.routes[0].distance / 1000).toFixed(2);
+            const durationMin = Math.round(data.routes[0].duration / 60);
+            const routeInfoBox = document.getElementById('route-info-box');
+            const distanceText = document.getElementById('route-distance-text');
+            const durationText = document.getElementById('route-duration-text');
+            
+            let distanceHtml = `<strong style="color: #dc3545; font-size: 1.1rem;">${distanceKm} km</strong>`;
+            if (stationName) {
+                distanceHtml += ` <span class="text-muted">→ ${stationName}</span>`;
+            }
+            distanceText.innerHTML = distanceHtml;
+            durationText.innerHTML = `⏱️ Thời gian: khoảng ${durationMin} phút`;
+            routeInfoBox.style.display = 'block';
+        } catch (e) {
+            alert('Lỗi kết nối dịch vụ chỉ đường.');
+        }
+    }
+
+    document.getElementById('btn-route-clear').addEventListener('click', function () {
+        clearRouteOnMap();
+        document.getElementById('route-info-box').style.display = 'none';
+    });
+
+    document.getElementById('btn-route-nearest').addEventListener('click', function () {
+        const o = getRouteOriginLL();
+        fetch('/api/get-stations-nearby/?lat=' + o.lat + '&lon=' + o.lon + '&radius=200000')
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                if (!data.stations || !data.stations.length) {
+                    alert('Không tìm thấy trạm nào. Thử tăng bán kính tìm trạm hoặc chọn điểm khác trên bản đồ.');
+                    return;
+                }
+                const st = data.stations[0];
+                showOSRMRoute(o.lat, o.lon, st.lat, st.lng, st.name);
+            })
+            .catch(function () { alert('Lỗi gọi API trạm.'); });
+    });
+
+    document.getElementById('btn-route-selected').addEventListener('click', function () {
+        const sel = document.getElementById('route-target-station');
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt || !opt.value) {
+            alert('Vui lòng chọn một trạm trong danh sách.');
+            return;
+        }
+        const lat2 = parseFloat(opt.getAttribute('data-lat'));
+        const lon2 = parseFloat(opt.getAttribute('data-lng'));
+        const stationName = opt.textContent;
+        const o = getRouteOriginLL();
+        showOSRMRoute(o.lat, o.lon, lat2, lon2, stationName);
+    });
 
     // Hiển thị các trạm hiện có
     {% for station in stations %}

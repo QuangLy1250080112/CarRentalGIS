@@ -52,11 +52,24 @@ class Car(models.Model):
     license_plate = models.CharField(max_length=15, unique=True)
     brand_name = models.CharField(max_length=50, null=True, blank=True)
     short_description = models.TextField(blank=True, default='', help_text='Mô tả ngắn hiển thị trên trang loại xe (admin chỉnh sửa).')
+    detail_description = models.TextField(blank=True, default='', help_text='Mô tả chi tiết (HTML từ CKEditor), trang car_description.')
     image = models.ImageField(upload_to='cars/', null=True, blank=True)
     current_location = models.PointField(srid=4326, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_available = models.BooleanField(default=True)
     def __str__(self): return self.license_plate
+
+
+class CarGalleryImage(models.Model):
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='gallery_images')
+    image = models.ImageField(upload_to='cars/gallery/')
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return f'Gallery #{self.pk} ({self.car_id})'
 
 class GPSLog(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE)
@@ -78,3 +91,28 @@ class BookingHistory(models.Model):
     total_distance = models.FloatField(default=0.0)
     total_fee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, default='ongoing')
+
+
+class Review(models.Model):
+    user = models.ForeignKey(UserCustom, on_delete=models.CASCADE, related_name='reviews')
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='reviews')
+    booking_history = models.OneToOneField(BookingHistory, on_delete=models.CASCADE, related_name='review')
+    rating = models.IntegerField(choices=[(i, f'{i} sao') for i in range(1, 6)])
+    comment = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('booking_history',)
+
+    def __str__(self):
+        return f'Review by {self.user.username} for {self.car.brand_name} - {self.rating} sao'
+
+
+class ReviewImage(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='reviews/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Image for {self.review.id}'

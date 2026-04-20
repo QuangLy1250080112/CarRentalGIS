@@ -6,6 +6,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('car-types/', views.car_types_view, name='car_types'),
     path('car-type/<int:type_id>/', views.car_detail_view, name='car_detail'),
+    path('car/<int:car_id>/description/', views.car_description, name='car_description'),
+    path('car/<int:car_id>/ckeditor/upload/', views.ckeditor_upload, name='ckeditor_upload'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('management/', views.management, name='management'),
     path('administration/', views.administration, name='administration'),
@@ -44,6 +46,11 @@ urlpatterns = [
     path('return-car/<int:history_id>/', views.return_car, name='return_car'),
     path('revenue/', views.revenue_statistics, name='revenue_statistics'),
     path('revenue/export/', views.export_revenue_excel, name='export_revenue_excel'),
+
+    path('api/reviews/<int:car_id>/', views.get_reviews_for_car, name='get_reviews'),
+    path('api/check-review/<int:car_id>/', views.check_can_review, name='check_can_review'),
+    path('api/add-review/', views.add_review, name='add_review'),
+    path('review/delete/<int:review_id>/', views.delete_review, name='delete_review'),
 
     path('error-403/', views.error_403_view, name='error_403'),
 ]

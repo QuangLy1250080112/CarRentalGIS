@@ -1,8 +1,10 @@
 import math
 import os
+import uuid
 import urllib.request
 import urllib.parse
 import json
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
@@ -31,7 +33,7 @@ from functools import wraps
 
 import openpyxl
 from openpyxl.styles import Alignment
-from .models import BookingHistory, Car, CarType, GPSLog, SafeZone, UserCustom, Station
+from .models import BookingHistory, Car, CarGalleryImage, CarType, GPSLog, SafeZone, UserCustom, Station, Review, ReviewImage
 from .gis_tools import calculate_stats, START_POINT_COORD
 
 from django.db.models import Sum
@@ -40,6 +42,10 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import HttpResponse
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 # Điểm gốc mặc định (Bến Thành) - Kinh độ trước, Vĩ độ sau cho GIS
 START_POINT_GIS = Point(106.698, 10.771, srid=4326)
@@ -238,6 +244,91 @@ def car_detail_view(request, type_id):
         'type': car_type,
         'cars': specific_cars
     })
+
+
+def car_description(request, car_id):
+    car = get_object_or_404(Car, id=car_id)
+    gallery = list(car.gallery_images.all())
+    slides = []
+    if car.image:
+        slides.append({'url': car.image.url, 'caption': 'Ảnh đại diện'})
+    for gi in gallery:
+        slides.append({'url': gi.image.url, 'caption': 'Ảnh gallery'})
+
+    if request.method == 'POST':
+        if not is_admin(request):
+            messages.error(request, 'Bạn không có quyền thực hiện thao tác này.')
+            return redirect('login')
+        form_kind = request.POST.get('form')
+        if form_kind == 'delete_gallery':
+            img = get_object_or_404(CarGalleryImage, id=request.POST.get('image_id'), car=car)
+            if img.image:
+                try:
+                    if os.path.isfile(img.image.path):
+                        os.remove(img.image.path)
+                except OSError:
+                    pass
+            img.delete()
+            messages.success(request, 'Đã xóa ảnh khỏi gallery.')
+        elif form_kind == 'gallery':
+            files = request.FILES.getlist('gallery_images')
+            for f in files:
+                if f:
+                    CarGalleryImage.objects.create(car=car, image=f)
+            if files:
+                messages.success(request, f'Đã thêm {len(files)} ảnh vào gallery.')
+        elif form_kind == 'description':
+            car.detail_description = request.POST.get('detail_description', '')
+            car.save()
+            messages.success(request, 'Đã lưu mô tả chi tiết.')
+        return redirect('car_description', car_id=car.id)
+
+    return render(request, 'rental/car_description.html', {
+        'car': car,
+        'gallery': gallery,
+        'slides': slides,
+    })
+
+
+@csrf_exempt
+@require_POST
+def ckeditor_upload(request, car_id):
+    """CKEditor 4 Image dialog — iframe POST không gửi CSRF; chỉ admin session."""
+    get_object_or_404(Car, id=car_id)
+    try:
+        func_num = int(request.GET.get('CKEditorFuncNum', 1))
+    except ValueError:
+        func_num = 1
+
+    def respond(url: str, err: str = ''):
+        return HttpResponse(
+            '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction(%d, %s, %s);</script>'
+            % (func_num, json.dumps(url), json.dumps(err)),
+            content_type='text/html; charset=utf-8',
+        )
+
+    if not is_admin(request):
+        return respond('', 'Bạn không có quyền tải ảnh.')
+
+    upload = request.FILES.get('upload')
+    if not upload:
+        return respond('', 'Không nhận được file.')
+
+    ctype = (upload.content_type or '').lower()
+    if not ctype.startswith('image/'):
+        return respond('', 'Chỉ chấp nhận file ảnh.')
+
+    if upload.size > 5 * 1024 * 1024:
+        return respond('', 'Ảnh tối đa 5MB.')
+
+    ext = os.path.splitext(upload.name)[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'):
+        ext = '.jpg'
+    rel_path = 'cars/ckeditor/%s%s' % (uuid.uuid4().hex, ext)
+    default_storage.save(rel_path, ContentFile(upload.read()))
+    url = request.build_absolute_uri(default_storage.url(rel_path))
+    return respond(url, '')
+
 
 def book_car(request):
     if request.method == 'POST':
@@ -555,8 +646,15 @@ def delete_car(request, id):
         try:
             if os.path.isfile(car.image.path):
                 os.remove(car.image.path)
-        except:
+        except OSError:
             pass
+    for gi in car.gallery_images.all():
+        if gi.image:
+            try:
+                if os.path.isfile(gi.image.path):
+                    os.remove(gi.image.path)
+            except OSError:
+                pass
     car.delete()
     return redirect('car_types')
 
@@ -684,10 +782,23 @@ def station_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
+    stations_route = [
+        {
+            'id': st.id,
+            'name': st.name,
+            'lat': float(st.area.centroid.y),
+            'lng': float(st.area.centroid.x),
+        }
+        for st in Station.objects.all().order_by('name')
+    ]
+
     return render(request, 'rental/station_list.html', {
         'page_obj': page_obj,
         'stations': page_obj.object_list,
-        'query': query
+        'query': query,
+        'stations_route': stations_route,
+        'default_route_lat': START_POINT_COORD[0],
+        'default_route_lon': START_POINT_COORD[1],
     })
 
 @admin_only
@@ -990,3 +1101,210 @@ def admin_required(view_func):
             
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+# --- 5. QUẢN LÝ REVIEW XE ---
+
+def get_reviews_for_car(request, car_id):
+    """Lấy danh sách review của một xe"""
+    try:
+        logger = logging.getLogger(__name__)
+        
+        car = Car.objects.filter(id=car_id).first()
+        if not car:
+            logger.warning(f'Car not found: {car_id}')
+            return JsonResponse({'error': 'Xe không tồn tại'}, status=400)
+        
+        reviews = Review.objects.filter(car=car).select_related('user').prefetch_related('images').order_by('-created_at')
+        logger.info(f'Found {reviews.count()} reviews for car {car_id}')
+        
+        reviews_data = []
+        for review in reviews:
+            try:
+                images = []
+                for img in review.images.all():
+                    try:
+                        if img.image and img.image.name:
+                            images.append(img.image.url)
+                    except Exception as img_err:
+                        logger.error(f'Error getting image URL: {img_err}')
+                        continue
+                
+                reviews_data.append({
+                    'id': review.id,
+                    'username': review.user.username,
+                    'user_irl_name': review.user.IRL_name,
+                    'rating': review.rating,
+                    'comment': review.comment,
+                    'images': images,
+                    'created_at': review.created_at.strftime('%d/%m/%Y %H:%M'),
+                })
+            except Exception as review_err:
+                logger.error(f'Error processing review {review.id}: {review_err}')
+                continue
+        
+        logger.info(f'Returning {len(reviews_data)} reviews')
+        return JsonResponse({'reviews': reviews_data})
+    except Exception as e:
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error in get_reviews_for_car: {str(e)}\n{traceback.format_exc()}')
+        return JsonResponse({'error': f'Lỗi: {str(e)}'}, status=500)
+
+
+def check_can_review(request, car_id):
+    """Kiểm tra xem người dùng có thể review xe này không"""
+    if not is_logged_in(request):
+        return JsonResponse({'can_review': False, 'reason': 'Vui lòng đăng nhập để đánh giá'})
+    
+    try:
+        user_id = request.session.get('user_id')
+        user = UserCustom.objects.filter(id=user_id).first()
+        car = Car.objects.filter(id=car_id).first()
+        
+        if not user or not car:
+            return JsonResponse({'can_review': False, 'reason': 'Xe hoặc người dùng không tồn tại'})
+        
+        # **Admin không cần review** - admin chỉ xóa
+        if user.role == 'admin':
+            return JsonResponse({'can_review': False, 'reason': 'Admin không thể đánh giá'})
+        
+        # Kiểm tra xem đã có review chưa
+        existing_review = Review.objects.filter(user=user, car=car).first()
+        if existing_review:
+            return JsonResponse({'can_review': False, 'reason': 'Bạn đã đánh giá xe này rồi', 'review_id': existing_review.id})
+        
+        # Kiểm tra xem người dùng có đơn đặt xe đã hoàn thành không
+        completed_booking = BookingHistory.objects.filter(
+            user=user,
+            car=car,
+            status='completed'
+        ).first()
+        
+        if not completed_booking:
+            return JsonResponse({'can_review': False, 'reason': 'Bạn chưa hoàn thành chuyến đi với xe này'})
+        
+        # Kiểm tra xem order_status của user có phải "confirmed" không
+        if user.order_status != 'confirmed':
+            return JsonResponse({'can_review': False, 'reason': 'Tài khoản của bạn chưa được xác nhận (order_status chưa confirmed)'})
+        
+        return JsonResponse({'can_review': True})
+    
+    except Exception as e:
+        return JsonResponse({'can_review': False, 'reason': f'Lỗi: {str(e)}'})
+
+
+
+def add_review(request):
+    """Thêm review xe mới"""
+    if request.method == 'POST' and is_logged_in(request):
+        try:
+            user_id = request.session.get('user_id')
+            user = UserCustom.objects.filter(id=user_id).first()
+            
+            if not user:
+                return JsonResponse({'status': 'error', 'message': 'Người dùng không tồn tại'})
+            
+            # Admin không thể đánh giá
+            if user.role == 'admin':
+                return JsonResponse({'status': 'error', 'message': 'Admin không thể đánh giá'})
+            
+            car_id = request.POST.get('car_id')
+            rating = request.POST.get('rating')
+            comment = request.POST.get('comment', '').strip()
+            
+            car = Car.objects.filter(id=car_id).first()
+            if not car:
+                return JsonResponse({'status': 'error', 'message': 'Xe không tồn tại'})
+            
+            # Kiểm tra xem đã review chưa
+            if Review.objects.filter(user=user, car=car).exists():
+                return JsonResponse({'status': 'error', 'message': 'Bạn đã đánh giá xe này rồi'})
+            
+            # Kiểm tra booking hoàn thành
+            completed_booking = BookingHistory.objects.filter(
+                user=user,
+                car=car,
+                status='completed'
+            ).first()
+            
+            if not completed_booking:
+                return JsonResponse({'status': 'error', 'message': 'Không tìm thấy chuyến đi hoàn thành'})
+            
+            # Kiểm tra order_status
+            if user.order_status != 'confirmed':
+                return JsonResponse({'status': 'error', 'message': 'Tài khoản chưa được xác nhận'})
+            
+            # Tạo review
+            review = Review.objects.create(
+                user=user,
+                car=car,
+                booking_history=completed_booking,
+                rating=int(rating),
+                comment=comment
+            )
+            
+            # Xử lý tải lên hình ảnh
+            uploaded_files = request.FILES.getlist('images')
+            for image_file in uploaded_files:
+                ReviewImage.objects.create(review=review, image=image_file)
+            
+            return JsonResponse({'status': 'success', 'review_id': review.id})
+        
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)})
+    
+    return JsonResponse({'status': 'error', 'message': 'Yêu cầu không hợp lệ'})
+
+
+def delete_review(request, review_id):
+    """Xóa review (chỉ admin hoặc chính người dùng)"""
+    if not is_logged_in(request):
+        if request.headers.get('Content-Type') == 'application/json':
+            return JsonResponse({'status': 'error', 'message': 'Vui lòng đăng nhập'}, status=401)
+        return redirect('login')
+    
+    try:
+        review = Review.objects.filter(id=review_id).first()
+        if not review:
+            if request.headers.get('Content-Type') == 'application/json':
+                return JsonResponse({'status': 'error', 'message': 'Đánh giá không tồn tại'}, status=404)
+            messages.error(request, 'Đánh giá không tồn tại')
+            return redirect('car_types')
+        
+        user_id = request.session.get('user_id')
+        user = UserCustom.objects.filter(id=user_id).first()
+        
+        if not user:
+            if request.headers.get('Content-Type') == 'application/json':
+                return JsonResponse({'status': 'error', 'message': 'Người dùng không tồn tại'}, status=401)
+            return redirect('login')
+        
+        # Kiểm tra quyền (admin hoặc chính người dùng)
+        if user.role != 'admin' and review.user.id != user.id:
+            if request.headers.get('Content-Type') == 'application/json':
+                return JsonResponse({'status': 'error', 'message': 'Bạn không có quyền xóa review này'}, status=403)
+            messages.error(request, 'Bạn không có quyền xóa review này')
+            return redirect('car_description', car_id=review.car.id)
+        
+        car_id = review.car.id
+        review.delete()
+        
+        # Nếu là AJAX request, trả JSON
+        if request.headers.get('Content-Type') == 'application/json':
+            return JsonResponse({'status': 'success', 'message': 'Đánh giá đã được xóa!'})
+        
+        # Nếu là form submit bình thường, redirect
+        messages.success(request, 'Đánh giá đã được xóa!')
+        return redirect('car_description', car_id=car_id)
+    
+    except Exception as e:
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error in delete_review: {str(e)}\n{traceback.format_exc()}')
+        
+        if request.headers.get('Content-Type') == 'application/json':
+            return JsonResponse({'status': 'error', 'message': f'Lỗi: {str(e)}'}, status=500)
+        
+        messages.error(request, f'Lỗi: {str(e)}')
+        return redirect('car_types')

@@ -1,0 +1,922 @@
+{% extends 'rental/base.html' %}
+{% load static %}
+{% block head %}
+{% if request.session.role == 'admin' %}
+<script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<div class="py-2">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'car_types' %}" class="text-decoration-none">Loại xe</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'car_detail' car.car_type_id %}" class="text-decoration-none">{{ car.car_type.name }}</a></li>
+      <li class="breadcrumb-item active">{{ car.brand_name|default:car.license_plate }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 fw-bold text-dark mb-1">{{ car.brand_name|default:"Xe" }}</h1>
+      <p class="text-muted mb-0 small"> {{ car.car_type.name }}</p>
+    </div>
+    <a href="{% url 'car_detail' car.car_type_id %}" class="btn btn-outline-secondary rounded-pill">
+      <i class="fas fa-arrow-left me-1"></i>Quay lại danh sách
+    </a>
+  </div>
+
+  {% if request.session.role == 'admin' %}
+  <form id="galleryUploadForm" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="gallery" />
+    <input type="file" id="galleryFileInput" name="gallery_images" accept="image/*" multiple class="d-none" aria-label="Chọn ảnh gallery" />
+  </form>
+  {% endif %}
+
+  <div class="row g-4 align-items-start mb-5">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm overflow-hidden" style="border-radius: 16px;">
+        <div class="card-header bg-white border-0 py-3">
+        </div>
+        <div class="card-body p-0">
+          <div class="ratio ratio-16x9 gallery-main-stage">
+            {% if slides %}
+            <div class="gallery-main-fill">
+              {% with main=slides|first %}
+              <img id="gallery-main-img" src="{{ main.url }}" alt="{{ car.brand_name|default:car.license_plate }}" class="gallery-main-img-el" />
+              {% endwith %}
+              {% if slides|length > 1 %}
+              <button type="button" id="gallery-main-prev" class="gallery-main-nav" aria-label="Ảnh trước">
+                <i class="fas fa-chevron-left fa-sm"></i>
+              </button>
+              <button type="button" id="gallery-main-next" class="gallery-main-nav" aria-label="Ảnh sau">
+                <i class="fas fa-chevron-right fa-sm"></i>
+              </button>
+              {% endif %}
+            </div>
+            {% else %}
+            <div class="gallery-main-fill gallery-main-fill--empty d-flex flex-column align-items-center justify-content-center text-muted">
+              <i class="fas fa-car fa-4x mb-3 opacity-50"></i>
+              <p class="mb-0">Chưa có ảnh nào.</p>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if slides %}
+          <div class="gallery-thumb-toolbar d-flex align-items-stretch border-top bg-white">
+            <button type="button" id="gallery-thumb-prev" class="btn btn-light border-0 border-end rounded-0 px-3 flex-shrink-0" aria-label="Cuộn ảnh nhỏ sang trái">
+              <i class="fas fa-chevron-left text-secondary"></i>
+            </button>
+            <div id="gallery-thumb-scroll" class="flex-grow-1 d-flex gap-2 py-2 px-2 overflow-auto align-items-center" style="max-height: 92px; scrollbar-width: thin;">
+              {% for s in slides %}
+              <button type="button" class="gallery-thumb-btn flex-shrink-0 border-0 rounded-2 overflow-hidden p-0 bg-white shadow-sm position-relative {% if forloop.first %}gallery-thumb-active{% endif %}" data-url="{{ s.url }}" style="width: 80px; height: 60px;" aria-label="Xem ảnh {{ forloop.counter }}">
+                <img src="{{ s.url }}" alt="" class="w-100 h-100 object-fit-cover" />
+              </button>
+              {% endfor %}
+            </div>
+            <button type="button" id="gallery-thumb-next" class="btn btn-light border-0 border-start rounded-0 px-3 flex-shrink-0" aria-label="Cuộn ảnh nhỏ sang phải">
+              <i class="fas fa-chevron-right text-secondary"></i>
+            </button>
+          </div>
+          {% endif %}
+
+          {% if request.session.role == 'admin' and gallery %}
+          <div class="border-top bg-light px-3 py-3">
+            <h3 class="h6 fw-bold text-secondary mb-3"><i class="fas fa-layer-group me-2"></i>Quản lý ảnh</h3>
+            <div class="row g-2">
+              {% for gi in gallery %}
+              <div class="col-4 col-sm-3">
+                <div class="position-relative border rounded-3 overflow-hidden shadow-sm bg-white">
+                  <div class="ratio ratio-4x3">
+                    <img src="{{ gi.image.url }}" class="w-100 h-100 object-fit-cover" alt="" />
+                  </div>
+                  <form method="post" class="gallery-delete-form position-absolute top-0 end-0 p-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="form" value="delete_gallery" />
+                    <input type="hidden" name="image_id" value="{{ gi.id }}" />
+                    <button type="button" class="btn btn-danger btn-sm rounded-circle gallery-delete-btn" title="Xóa"><i class="fas fa-times"></i></button>
+                  </form>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {% if request.session.role == 'admin' %}
+          <div class="border-top bg-white px-3 py-3">
+            <p class="small text-muted fw-semibold mb-2">Tải ảnh gallery</p>
+            <div id="galleryPreviewStrip" class="gallery-preview-strip d-flex flex-wrap gap-2 align-items-center min-vh-0"></div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+              <button type="button" id="galleryPickBtn" class="btn btn-outline-primary btn-sm rounded-pill">
+                <i class="fas fa-folder-open me-1"></i>Upload ảnh
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" id="galleryClearBtn" disabled>
+                <i class="fas fa-times me-1"></i>Bỏ chọn
+              </button>
+              <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4" id="gallerySubmitBtn" disabled form="galleryUploadForm">
+                <i class="fas fa-cloud-upload-alt me-1"></i><span id="gallerySubmitLabel">Tải lên</span>
+              </button>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm d-flex flex-column" style="border-radius: 16px;">
+        <div class="card-header bg-white border-bottom py-3">
+          <h2 class="h5 mb-0 fw-bold"><i class="fas fa-align-left text-primary me-2"></i>Mô tả chi tiết</h2>
+        </div>
+        <div class="card-body p-4 d-flex flex-column flex-grow-1">
+          {% if request.session.role == 'admin' %}
+          <form method="post" id="detailDescriptionForm" class="d-flex flex-column flex-grow-1">
+            {% csrf_token %}
+            <input type="hidden" name="form" value="description" />
+            <textarea name="detail_description" id="id_detail_description" rows="10" class="form-control flex-grow-1" style="min-height: 280px;">{{ car.detail_description|safe }}</textarea>
+            <button type="submit" class="btn btn-primary rounded-pill mt-3 px-4 align-self-start"><i class="fas fa-save me-1"></i>Lưu mô tả</button>
+          </form>
+          <script>
+            document.addEventListener('DOMContentLoaded', function () {
+              if (typeof CKEDITOR === 'undefined') return;
+              var uploadUrl = '{% url "ckeditor_upload" car.id %}';
+              CKEDITOR.replace('id_detail_description', {
+                height: 380,
+                versionCheck: false,
+                filebrowserImageUploadUrl: uploadUrl,
+                filebrowserUploadUrl: uploadUrl
+              });
+            });
+          </script>
+          {% else %}
+            {% if car.detail_description %}
+            <div class="car-detail-html text-secondary flex-grow-1 overflow-auto">{{ car.detail_description|safe }}</div>
+            {% else %}
+            <p class="text-muted mb-0 fst-italic">Chưa có mô tả chi tiết cho xe này.</p>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phần Đánh giá -->
+  <div class="row g-4 mb-5" id="reviews-section">
+    <div class="col-lg-12">
+      <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+        <div class="card-header bg-white border-bottom py-3">
+          <h2 class="h5 mb-0 fw-bold"><i class="fas fa-comments text-primary me-2"></i>Đánh giá từ khách hàng</h2>
+        </div>
+        <div class="card-body">
+          <!-- Form đánh giá -->
+          <div id="review-form-container" style="display: none;" class="mb-4">
+            <h5 class="mb-3">Đánh giá xe của bạn</h5>
+            <form id="reviewForm" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="car_id" value="{{ car.id }}">
+              
+              <div class="mb-3">
+                <label class="form-label fw-bold">Số sao <span class="text-danger">*</span></label>
+                <div class="star-rating" id="starRating">
+                  <i class="far fa-star star" data-rating="1" style="cursor: pointer; font-size: 2rem; color: #ffc107; margin-right: 5px;"></i>
+                  <i class="far fa-star star" data-rating="2" style="cursor: pointer; font-size: 2rem; color: #ffc107; margin-right: 5px;"></i>
+                  <i class="far fa-star star" data-rating="3" style="cursor: pointer; font-size: 2rem; color: #ffc107; margin-right: 5px;"></i>
+                  <i class="far fa-star star" data-rating="4" style="cursor: pointer; font-size: 2rem; color: #ffc107; margin-right: 5px;"></i>
+                  <i class="far fa-star star" data-rating="5" style="cursor: pointer; font-size: 2rem; color: #ffc107; margin-right: 5px;"></i>
+                </div>
+                <input type="hidden" id="ratingInput" name="rating" value="0" required>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold">Bình luận</label>
+                <textarea name="comment" class="form-control" rows="4" placeholder="Chia sẻ trải nghiệm của bạn..."></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold">Thêm hình ảnh</label>
+                <input type="file" id="reviewImages" name="images" accept="image/*" multiple class="form-control" />
+              </div>
+
+              <div id="imagePreviewContainer" class="mb-3" style="display: none;">
+                <label class="form-label fw-bold">Preview ảnh</label>
+                <div id="imagePreview" class="d-flex flex-wrap gap-2"></div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary rounded-pill" id="submitReviewBtn">
+                  <i class="fas fa-paper-plane me-1"></i>Gửi đánh giá
+                </button>
+                <button type="button" class="btn btn-secondary rounded-pill" id="cancelReviewBtn">Hủy</button>
+              </div>
+            </form>
+            <hr>
+          </div>
+
+          <!-- Nút mở form đánh giá -->
+          <div id="review-prompt" class="text-center mb-4">
+            <button type="button" class="btn btn-outline-warning rounded-pill" id="openReviewFormBtn" style="display: none;">
+              <i class="fas fa-star me-1"></i>Đánh giá xe này
+            </button>
+            <div id="reviewStatusMessage" class="text-muted mt-2"></div>
+          </div>
+
+          <!-- Danh sách đánh giá -->
+          <div id="reviewsList" class="mt-4">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var main = document.getElementById('gallery-main-img');
+  var scrollEl = document.getElementById('gallery-thumb-scroll');
+  var thumbPrev = document.getElementById('gallery-thumb-prev');
+  var thumbNext = document.getElementById('gallery-thumb-next');
+  var mainPrev = document.getElementById('gallery-main-prev');
+  var mainNext = document.getElementById('gallery-main-next');
+  var thumbs = document.querySelectorAll('.gallery-thumb-btn');
+  var urls = Array.prototype.map.call(thumbs, function (b) {
+    return b.getAttribute('data-url');
+  }).filter(Boolean);
+  var n = urls.length;
+  var current = 0;
+
+  if (scrollEl && thumbPrev && thumbNext) {
+    var step = 220;
+    thumbPrev.addEventListener('click', function () {
+      scrollEl.scrollBy({ left: -step, behavior: 'smooth' });
+    });
+    thumbNext.addEventListener('click', function () {
+      scrollEl.scrollBy({ left: step, behavior: 'smooth' });
+    });
+  }
+
+  if (!main || !n) return;
+
+  function setIndex(i) {
+    current = (i % n + n) % n;
+    main.src = urls[current];
+    thumbs.forEach(function (b, idx) {
+      b.classList.toggle('gallery-thumb-active', idx === current);
+    });
+    if (scrollEl && thumbs[current]) {
+      thumbs[current].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }
+
+  thumbs.forEach(function (btn, idx) {
+    btn.addEventListener('click', function () {
+      setIndex(idx);
+    });
+  });
+
+  if (mainPrev) {
+    mainPrev.addEventListener('click', function () {
+      setIndex(current - 1);
+    });
+  }
+  if (mainNext) {
+    mainNext.addEventListener('click', function () {
+      setIndex(current + 1);
+    });
+  }
+})();
+</script>
+
+{% if request.session.role == 'admin' %}
+<script>
+function bindGalleryDeleteConfirm() {
+  document.querySelectorAll('.gallery-delete-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var form = btn.closest('form');
+      if (!form || typeof Swal === 'undefined') {
+        if (form && confirm('Xóa ảnh này?')) form.submit();
+        return;
+      }
+      Swal.fire({
+        title: 'Xóa ảnh gallery?',
+        text: 'Thao tác này không thể hoàn tác.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonText: 'Hủy',
+        confirmButtonText: 'Xóa'
+      }).then(function (result) {
+        if (result.isConfirmed) form.submit();
+      });
+    });
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bindGalleryDeleteConfirm);
+} else {
+  bindGalleryDeleteConfirm();
+}
+(function () {
+  var input = document.getElementById('galleryFileInput');
+  var pickBtn = document.getElementById('galleryPickBtn');
+  var strip = document.getElementById('galleryPreviewStrip');
+  var submitBtn = document.getElementById('gallerySubmitBtn');
+  var clearBtn = document.getElementById('galleryClearBtn');
+  var submitLabel = document.getElementById('gallerySubmitLabel');
+  if (!input || !strip || !pickBtn) return;
+
+  function galleryPick() {
+    input.click();
+  }
+  pickBtn.addEventListener('click', galleryPick);
+
+  function clearPreview() {
+    strip.innerHTML = '';
+    input.value = '';
+    submitBtn.disabled = true;
+    clearBtn.disabled = true;
+    if (submitLabel) submitLabel.textContent = 'Tải lên';
+  }
+
+  function renderPreviews(files) {
+    strip.innerHTML = '';
+    var list = Array.prototype.slice.call(files || []).filter(function (f) {
+      return f.type.indexOf('image/') === 0;
+    });
+    if (!list.length) {
+      submitBtn.disabled = true;
+      clearBtn.disabled = true;
+      if (submitLabel) submitLabel.textContent = 'Tải lên';
+      return;
+    }
+    submitBtn.disabled = false;
+    clearBtn.disabled = false;
+    if (submitLabel) submitLabel.textContent = 'Tải lên (' + list.length + ' ảnh)';
+    list.forEach(function (file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var wrap = document.createElement('div');
+        wrap.className = 'gallery-preview-item border rounded-2 overflow-hidden shadow-sm flex-shrink-0';
+        wrap.style.width = '88px';
+        wrap.style.height = '66px';
+        var img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = file.name;
+        img.className = 'w-100 h-100 object-fit-cover';
+        img.style.objectFit = 'cover';
+        wrap.appendChild(img);
+        strip.appendChild(wrap);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  input.addEventListener('change', function () {
+    renderPreviews(this.files);
+  });
+
+  clearBtn.addEventListener('click', clearPreview);
+
+  var uploadForm = document.getElementById('galleryUploadForm');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function (e) {
+      if (!input.files || !input.files.length) {
+        e.preventDefault();
+      }
+    });
+  }
+})();
+</script>
+{% endif %}
+
+<script>
+// --- Xử lý Review System ---
+(function () {
+  // Lấy carId từ URL hoặc context
+  const urlCarId = window.location.pathname.match(/\/car\/(\d+)/)?.[1];
+  const contextCarId = {{ car.id|default:"null" }};
+  const carId = contextCarId || parseInt(urlCarId);
+  
+  const isAdmin = {% if request.session.role == 'admin' %}true{% else %}false{% endif %};
+  
+  console.log('[Review System] ===== START =====');
+  console.log('[Review System] isAdmin:', isAdmin);
+  console.log('[Review System] session.role:', '{{ request.session.role }}');
+  console.log('[Review System] carId from context:', contextCarId, 'from URL:', urlCarId, 'final:', carId);
+  if (!carId || isNaN(carId)) {
+    console.error('[Review System] CRITICAL: carId is invalid! context=', contextCarId, 'url=', urlCarId);
+    return;
+  }
+  
+  // Khởi tạo star rating
+  function initStarRating() {
+    const stars = document.querySelectorAll('#starRating .star');
+    const ratingInput = document.getElementById('ratingInput');
+    
+    if (!ratingInput) {
+      console.error('[Review System] ratingInput not found');
+      return;
+    }
+    
+    stars.forEach(star => {
+      star.addEventListener('click', function() {
+        const rating = this.getAttribute('data-rating');
+        ratingInput.value = rating;
+        updateStars(rating);
+      });
+      
+      star.addEventListener('mouseover', function() {
+        const rating = this.getAttribute('data-rating');
+        updateStars(rating);
+      });
+    });
+    
+    const starRating = document.getElementById('starRating');
+    if (starRating) {
+      starRating.addEventListener('mouseleave', function() {
+        const rating = ratingInput.value;
+        updateStars(rating);
+      });
+    }
+  }
+  
+  function updateStars(rating) {
+    const stars = document.querySelectorAll('#starRating .star');
+    stars.forEach(star => {
+      if (star.getAttribute('data-rating') <= rating) {
+        star.classList.remove('far');
+        star.classList.add('fas');
+      } else {
+        star.classList.add('far');
+        star.classList.remove('fas');
+      }
+    });
+  }
+  
+  // Preview ảnh khi chọn
+  const reviewImages = document.getElementById('reviewImages');
+  if (reviewImages) {
+    console.log('[Review System] Binding reviewImages change handler');
+    reviewImages.addEventListener('change', function() {
+      console.log('[reviewImages] Files selected:', this.files.length);
+      const previewContainer = document.getElementById('imagePreviewContainer');
+      const preview = document.getElementById('imagePreview');
+      
+      if (!previewContainer || !preview) {
+        console.error('[reviewImages] Missing preview elements:', { previewContainer: !!previewContainer, preview: !!preview });
+        return;
+      }
+      
+      preview.innerHTML = '';
+      
+      if (this.files.length > 0) {
+        previewContainer.style.display = 'block';
+        Array.from(this.files).forEach(file => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.className = 'border rounded';
+            preview.appendChild(img);
+          };
+          reader.readAsDataURL(file);
+        });
+      } else {
+        previewContainer.style.display = 'none';
+      }
+    });
+  } else {
+    console.warn('[Review System] reviewImages input not found');
+  }
+  
+  // Tải trạng thái review
+  function loadReviewStatus() {
+    const formContainer = document.getElementById('review-form-container');
+    const openBtn = document.getElementById('openReviewFormBtn');
+    const statusMsg = document.getElementById('reviewStatusMessage');
+    
+    if (!formContainer || !openBtn || !statusMsg) {
+      console.error('[Review System] Missing DOM elements:', {
+        formContainer: !!formContainer,
+        openBtn: !!openBtn,
+        statusMsg: !!statusMsg
+      });
+      return;
+    }
+    
+    console.log('[loadReviewStatus] Starting fetch for car:', carId);
+    const startTime = Date.now();
+    
+    fetch(`/api/check-review/${carId}/`, { 
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(res => {
+        console.log(`[loadReviewStatus] Response received after ${Date.now() - startTime}ms:`, res.status);
+        if (!res.ok) {
+          console.error('[loadReviewStatus] HTTP Error:', res.status, res.statusText);
+          return res.text().then(text => {
+            console.error('[loadReviewStatus] Response body:', text);
+            throw new Error(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+          });
+        }
+        return res.text().then(text => {
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('[loadReviewStatus] JSON parse error:', e, 'Response:', text.substring(0, 200));
+            throw new Error('Invalid JSON response');
+          }
+        });
+      })
+      .then(data => {
+        console.log('[loadReviewStatus] Data received:', data);
+        
+        if (data.can_review) {
+          console.log('[loadReviewStatus] User CAN review');
+          openBtn.style.display = 'inline-block';
+          statusMsg.textContent = '';
+          
+          openBtn.onclick = function() {
+            console.log('[loadReviewStatus] Opening review form');
+            formContainer.style.display = 'block';
+            openBtn.style.display = 'none';
+            initStarRating();
+            formContainer.scrollIntoView({ behavior: 'smooth' });
+          };
+        } else {
+          console.log('[loadReviewStatus] User CANNOT review. Reason:', data.reason);
+          openBtn.style.display = 'none';
+          statusMsg.textContent = data.reason || data.error || 'Không thể đánh giá xe này';
+          statusMsg.className = 'text-muted mt-2';
+        }
+      })
+      .catch(err => {
+        console.error('[loadReviewStatus] Fetch error after', Date.now() - startTime, 'ms:', err);
+        openBtn.style.display = 'none';
+        statusMsg.textContent = `❌ Lỗi: ${err.message}`;
+        statusMsg.className = 'text-danger mt-2';
+      });
+  }
+  
+  // Gửi review
+  const reviewForm = document.getElementById('reviewForm');
+  if (reviewForm) {
+    console.log('[Review System] Binding reviewForm submit handler');
+    reviewForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      console.log('[reviewForm] Submit event triggered');
+      
+      const rating = document.getElementById('ratingInput').value;
+      if (!rating || rating == '0') {
+        console.warn('[reviewForm] No rating selected');
+        alert('Vui lòng chọn số sao!');
+        return;
+      }
+      
+      const formData = new FormData(this);
+      const submitBtn = document.getElementById('submitReviewBtn');
+      if (!submitBtn) {
+        console.error('[reviewForm] submitBtn not found');
+        return;
+      }
+      
+      console.log('[reviewForm] Submitting review with rating:', rating);
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang gửi...';
+      
+      const startTime = Date.now();
+      fetch('/api/add-review/', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => {
+        console.log(`[reviewForm] Response after ${Date.now() - startTime}ms:`, res.status);
+        if (!res.ok) {
+          console.error('[reviewForm] HTTP Error:', res.status);
+          return res.text().then(text => {
+            console.error('[reviewForm] Response body:', text);
+            throw new Error(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+          });
+        }
+        return res.text().then(text => {
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('[reviewForm] JSON parse error:', e, 'Response:', text.substring(0, 200));
+            throw new Error('Invalid JSON response');
+          }
+        });
+      })
+      .then(data => {
+        console.log('[reviewForm] Response data:', data);
+        if (data.status === 'success') {
+          console.log('[reviewForm] Review submitted successfully');
+          alert('Đánh giá của bạn đã được lưu!');
+          document.getElementById('review-form-container').style.display = 'none';
+          document.getElementById('openReviewFormBtn').style.display = 'none';
+          document.getElementById('reviewStatusMessage').textContent = 'Cảm ơn bạn đã đánh giá!';
+          loadReviews();
+        } else {
+          console.warn('[reviewForm] Server error:', data.message);
+          alert('Lỗi: ' + data.message);
+        }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Gửi đánh giá';
+      })
+      .catch(err => {
+        console.error('[reviewForm] Submit error after', Date.now() - startTime, 'ms:', err);
+        alert('❌ Có lỗi xảy ra: ' + err.message);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Gửi đánh giá';
+      });
+    });
+  } else {
+    console.warn('[Review System] reviewForm not found');
+  }
+  
+  // Hủy form
+  const cancelReviewBtn = document.getElementById('cancelReviewBtn');
+  if (cancelReviewBtn) {
+    console.log('[Review System] Binding cancelReviewBtn handler');
+    cancelReviewBtn.addEventListener('click', function() {
+      console.log('[cancelReviewBtn] Cancel clicked');
+      const formContainer = document.getElementById('review-form-container');
+      const openBtn = document.getElementById('openReviewFormBtn');
+      const reviewForm = document.getElementById('reviewForm');
+      const ratingInput = document.getElementById('ratingInput');
+      
+      if (formContainer) formContainer.style.display = 'none';
+      if (openBtn) openBtn.style.display = 'inline-block';
+      if (reviewForm) reviewForm.reset();
+      if (ratingInput) ratingInput.value = '0';
+    });
+  } else {
+    console.warn('[Review System] cancelReviewBtn not found');
+  }
+  
+  // Tải danh sách review
+  function loadReviews() {
+    const reviewsList = document.getElementById('reviewsList');
+    if (!reviewsList) {
+      console.error('[loadReviews] reviewsList element not found');
+      return;
+    }
+    
+    console.log('[loadReviews] Starting fetch for car:', carId);
+    const startTime = Date.now();
+    
+    fetch(`/api/reviews/${carId}/`, {
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(res => {
+        const elapsed = Date.now() - startTime;
+        console.log(`[loadReviews] Response received after ${elapsed}ms:`, {
+          status: res.status,
+          statusText: res.statusText,
+          ok: res.ok,
+          url: res.url
+        });
+        
+        if (!res.ok) {
+          console.error('[loadReviews] HTTP Error:', res.status, res.statusText);
+          // Cố gắng đọc error message từ response body
+          return res.text().then(text => {
+            console.error('[loadReviews] Response body:', text);
+            throw new Error(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+          });
+        }
+        return res.text().then(text => {
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('[loadReviews] JSON parse error:', e, 'Response:', text.substring(0, 200));
+            throw new Error('Invalid JSON response');
+          }
+        });
+      })
+      .then(data => {
+        console.log('[loadReviews] Data received:', data);
+        
+        // Xử lý cả success và error response
+        if (data.error) {
+          console.error('[loadReviews] API returned error:', data.error);
+          reviewsList.innerHTML = `<p class="text-center text-warning">⚠️ ${data.error}</p>`;
+          return;
+        }
+        
+        const reviews = data.reviews || [];
+        console.log('[loadReviews] Total reviews:', reviews.length);
+        
+        if (reviews.length === 0) {
+          reviewsList.innerHTML = '<p class="text-center text-muted">Chưa có đánh giá nào cho xe này.</p>';
+          return;
+        }
+        
+        let html = '';
+        reviews.forEach((review, idx) => {
+          console.log(`[loadReviews] Processing review ${idx}:`, review);
+          
+          let starsHtml = '';
+          for (let i = 1; i <= 5; i++) {
+            if (i <= review.rating) {
+              starsHtml += '<i class="fas fa-star text-warning"></i>';
+            } else {
+              starsHtml += '<i class="far fa-star text-muted"></i>';
+            }
+          }
+          
+          let imagesHtml = '';
+          if (review.images && review.images.length > 0) {
+            imagesHtml = '<div class="mt-2 d-flex flex-wrap gap-2">';
+            review.images.forEach(img => {
+              imagesHtml += `<img src="${img}" alt="review" class="rounded" style="width: 80px; height: 80px; object-fit: cover;">`;
+            });
+            imagesHtml += '</div>';
+          }
+          
+          let deleteBtn = '';
+          if (isAdmin) {
+            deleteBtn = `<button type="button" class="btn btn-sm btn-outline-danger mt-2 delete-review-btn" data-review-id="${review.id}">
+              <i class="fas fa-trash me-1"></i>Xóa
+            </button>`;
+          }
+          
+          html += `
+            <div class="card mb-3 border-light shadow-sm" style="border-radius: 12px;">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <h6 class="card-title fw-bold mb-1">${review.user_irl_name || review.username}</h6>
+                    <small class="text-muted">@${review.username} • ${review.created_at}</small>
+                  </div>
+                  <div>${starsHtml}</div>
+                </div>
+                <p class="card-text mt-2 mb-0">${review.comment || '(Không có bình luận)'}</p>
+                ${imagesHtml}
+                ${deleteBtn}
+              </div>
+            </div>
+          `;
+        });
+        
+        console.log('[loadReviews] Rendering', reviews.length, 'reviews');
+        reviewsList.innerHTML = html;
+        console.log('[loadReviews] Complete!');
+        
+        // Bind delete button handlers
+        document.querySelectorAll('.delete-review-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const reviewId = this.getAttribute('data-review-id');
+            if (confirm('Bạn chắc chắn muốn xóa đánh giá này không?')) {
+              console.log('[deleteReview] Deleting review:', reviewId);
+              fetch(`/review/delete/${reviewId}/`, {
+                method: 'POST',
+                headers: {
+                  'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                  'Content-Type': 'application/json'
+                }
+              })
+              .then(res => res.text().then(text => {
+                try {
+                  return JSON.parse(text);
+                } catch (e) {
+                  console.error('[deleteReview] Response:', text.substring(0, 200));
+                  throw new Error('Invalid response');
+                }
+              }))
+              .then(data => {
+                console.log('[deleteReview] Response:', data);
+                alert('Đã xóa đánh giá!');
+                loadReviews(); // Reload list
+              })
+              .catch(err => {
+                console.error('[deleteReview] Error:', err);
+                alert('❌ Lỗi xóa: ' + err.message);
+              });
+            }
+          });
+        });
+      })
+      .catch(err => {
+        const elapsed = Date.now() - startTime;
+        console.error('[loadReviews] Fetch error after', elapsed, 'ms:', {
+          message: err.message,
+          stack: err.stack
+        });
+        reviewsList.innerHTML = `<p class="text-center text-danger">❌ Lỗi tải đánh giá: ${err.message}</p>`;
+      });
+  }
+  
+  // Khởi tạo khi trang tải xong
+  function initializeReviewSystem() {
+    console.log('[Review System] Initializing review system');
+    console.log('[Review System] isAdmin:', isAdmin);
+    
+    // Cho admin: Chỉ tải danh sách reviews, không check can_review
+    if (isAdmin) {
+      console.log('[Review System] Admin detected - loading reviews only');
+      loadReviews();
+    } else {
+      // Cho guest: Check can_review trước
+      console.log('[Review System] Guest detected - checking review status and loading reviews');
+      loadReviewStatus();
+      loadReviews();
+    }
+  }
+  
+  if (document.readyState === 'loading') {
+    console.log('[Review System] Document loading, waiting for DOMContentLoaded');
+    document.addEventListener('DOMContentLoaded', initializeReviewSystem);
+  } else {
+    console.log('[Review System] Document already loaded');
+    initializeReviewSystem();
+  }
+})();
+</script>
+
+<style>
+  /* Khung 16:9 cố định; nền sáng — không viền đen quanh ảnh */
+  .gallery-main-stage {
+    background: #fff;
+    border-bottom: 1px solid #e9ecef;
+  }
+  .gallery-main-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    overflow: hidden;
+  }
+  .gallery-main-fill--empty {
+    background: #f8f9fa;
+  }
+  .gallery-main-img-el {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
+  }
+  .object-fit-cover { object-fit: cover; }
+  .object-fit-contain { object-fit: contain; }
+  .car-detail-html img { max-width: 100%; height: auto; }
+  .gallery-preview-strip { min-height: 72px; }
+  .gallery-thumb-active {
+    box-shadow: 0 0 0 3px #0d6efd;
+    z-index: 1;
+  }
+  .gallery-thumb-btn { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+  .gallery-thumb-btn:hover { transform: scale(1.04); }
+  #gallery-thumb-scroll { scroll-behavior: smooth; }
+  .gallery-main-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    color: #212529;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+    line-height: 1;
+  }
+  #gallery-main-prev { left: 10px; }
+  #gallery-main-next { right: 10px; left: auto; }
+  .gallery-main-nav:hover {
+    background: #fff;
+    color: #0d6efd;
+    border-color: rgba(13, 110, 253, 0.25);
+  }
+  .gallery-main-nav:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+  }
+</style>
+{% endblock %}
