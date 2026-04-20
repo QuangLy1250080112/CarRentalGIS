@@ -33,7 +33,8 @@ from functools import wraps
 
 import openpyxl
 from openpyxl.styles import Alignment
-from .models import BookingHistory, Car, CarGalleryImage, CarType, GPSLog, SafeZone, UserCustom, Station, Review, ReviewImage
+from .models import BookingHistory, Car, CarGalleryImage, CarType, GPSLog, HomePageContent, NewsSection, SafeZone, UserCustom, Station, Review, ReviewImage
+from .forms import HomePageContentForm, NewsSectionForm
 from .gis_tools import calculate_stats, START_POINT_COORD
 
 from django.db.models import Sum
@@ -224,10 +225,47 @@ def activate(request, token):
 # --- 2. CÁC VIEW GIAO DIỆN CHÍNH (KHÔNG THAY ĐỔI LOGIC) -----
 
 def home(request):
-    return render(request, 'rental/index.html')
+    home_content, _ = HomePageContent.objects.get_or_create(id=1)
+    latest_news = NewsSection.objects.filter(is_published=True)[:12]
+    return render(request, 'rental/index.html', {
+        'home_content': home_content,
+        'latest_news': latest_news,
+    })
 
 def about(request):
     return render(request, 'rental/about.html')
+
+
+def news_detail(request, news_id):
+    article = get_object_or_404(NewsSection, id=news_id, is_published=True)
+    return render(request, 'rental/news_section.html', {'article': article})
+
+
+@admin_only
+def add_news(request):
+    if request.method == 'POST':
+        form = NewsSectionForm(request.POST, request.FILES)
+        if form.is_valid():
+            article = form.save()
+            messages.success(request, 'Đã thêm bài báo thành công.')
+            return redirect('news_detail', news_id=article.id)
+    else:
+        form = NewsSectionForm()
+    return render(request, 'rental/news_form.html', {'form': form})
+
+
+@admin_only
+def edit_home_content(request):
+    home_content, _ = HomePageContent.objects.get_or_create(id=1)
+    if request.method == 'POST':
+        form = HomePageContentForm(request.POST, request.FILES, instance=home_content)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Đã cập nhật nội dung trang chủ.')
+            return redirect('home')
+    else:
+        form = HomePageContentForm(instance=home_content)
+    return render(request, 'rental/home_content_form.html', {'form': form})
 
 @admin_only
 def administration(request):

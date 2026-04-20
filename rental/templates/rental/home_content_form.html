@@ -1,0 +1,81 @@
+{% extends 'rental/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h1 class="h4 mb-0">Chỉnh sửa nội dung trang chủ</h1>
+          <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">Quay lại</a>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="row g-3">
+          {% csrf_token %}
+
+          <div class="col-12">
+            <label class="form-label">Tiêu đề chính</label>
+            {{ form.hero_title }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Mô tả chính</label>
+            {{ form.hero_description }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Nút chính</label>
+            {{ form.hero_button_text }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Link nút chính</label>
+            {{ form.hero_button_url }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Hình ảnh banner trang chủ</label>
+            {{ form.hero_image }}
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Tiêu đề điểm mạnh 1</label>
+            {{ form.feature_1_title }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Mô tả điểm mạnh 1</label>
+            {{ form.feature_1_description }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Tiêu đề điểm mạnh 2</label>
+            {{ form.feature_2_title }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Mô tả điểm mạnh 2</label>
+            {{ form.feature_2_description }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Tiêu đề điểm mạnh 3</label>
+            {{ form.feature_3_title }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Mô tả điểm mạnh 3</label>
+            {{ form.feature_3_description }}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Tiêu đề mục tin tức</label>
+            {{ form.news_section_title }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phụ đề mục tin tức</label>
+            {{ form.news_section_subtitle }}
+          </div>
+
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Lưu nội dung
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

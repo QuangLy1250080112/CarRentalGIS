@@ -1,0 +1,51 @@
+{% extends 'rental/base.html' %}
+
+{% block head %}
+<script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h1 class="h4 mb-0">Thêm bài báo</h1>
+          <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">Quay lại</a>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="row g-3">
+          {% csrf_token %}
+          <div class="col-12">
+            <label class="form-label">Tiêu đề bài viết</label>
+            {{ form.title }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Hình ảnh đại diện</label>
+            {{ form.thumbnail }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Nội dung bài viết</label>
+            {{ form.content }}
+          </div>
+          <div class="col-12 form-check">
+            {{ form.is_published }}
+            <label class="form-check-label">Hiển thị ngoài trang chủ</label>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Lưu bài báo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (window.CKEDITOR) {
+    CKEDITOR.replace('id_content');
+  }
+</script>
+{% endblock %}

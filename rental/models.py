@@ -116,3 +116,39 @@ class ReviewImage(models.Model):
 
     def __str__(self):
         return f'Image for {self.review.id}'
+
+
+class NewsSection(models.Model):
+    title = models.CharField(max_length=255)
+    thumbnail = models.ImageField(upload_to='news/')
+    content = models.TextField(help_text='Nội dung bài viết (HTML từ CKEditor).')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_published = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class HomePageContent(models.Model):
+    hero_title = models.CharField(max_length=255, default='Hệ thống thuê xe trực tuyến')
+    hero_description = models.TextField(default='Nền tảng thuê xe nhanh chóng, tiện lợi và đáng tin cậy.')
+    hero_button_text = models.CharField(max_length=100, default='Đặt xe ngay')
+    hero_button_url = models.CharField(max_length=255, default='/car-types/')
+    hero_image = models.ImageField(upload_to='homepage/', null=True, blank=True)
+
+    feature_1_title = models.CharField(max_length=255, default='Nhiều loại xe đa dạng')
+    feature_1_description = models.TextField(default='Cung cấp nhiều loại xe phù hợp cho mọi nhu cầu.')
+    feature_2_title = models.CharField(max_length=255, default='Đặt xe nhanh chóng')
+    feature_2_description = models.TextField(default='Giao diện đơn giản, dễ sử dụng chỉ trong vài bước.')
+    feature_3_title = models.CharField(max_length=255, default='Thông tin minh bạch')
+    feature_3_description = models.TextField(default='Hiển thị đầy đủ thông tin xe và giá thuê rõ ràng.')
+
+    news_section_title = models.CharField(max_length=255, default='Tin Tức')
+    news_section_subtitle = models.CharField(max_length=255, blank=True, default='Các bài viết mới nhất từ hệ thống')
+
+    def __str__(self):
+        return 'Home page content'

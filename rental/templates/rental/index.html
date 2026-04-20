@@ -1,31 +1,37 @@
-{% extends 'rental/base.html' %} {% block content %}
+{% extends 'rental/base.html' %}
+
+{% block head %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+  <style>
+    .news-slider .swiper-slide {
+      height: auto;
+    }
+    .news-card-img {
+      height: 220px;
+      object-fit: cover;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
 <div class="row align-items-center py-5">
   <div class="col-md-6">
-    <h1 class="display-4 fw-bold text-dark">Hệ thống thuê xe trực tuyến</h1>
-    <p class="lead text-secondary">
-      Nền tảng thuê xe nhanh chóng, tiện lợi và đáng tin cậy. Bạn có thể dễ dàng
-      tìm kiếm, lựa chọn và đặt xe phù hợp với nhu cầu chỉ trong vài bước, giúp
-      tiết kiệm thời gian, đảm bảo minh bạch thông tin và mang lại trải nghiệm
-      thuê xe đơn giản, hiện đại.
-    </p>
+    <h1 class="display-4 fw-bold text-dark">{{ home_content.hero_title }}</h1>
+    <p class="lead text-secondary">{{ home_content.hero_description }}</p>
     <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-      <a
-        href="{% url 'car_types' %}"
-        class="btn btn-primary btn-lg px-4 me-md-2"
-        >Đặt xe ngay</a
-      >
-      {% if request.session.user_id %} {% if request.session.role == 'admin' %}
-      <a
-        href="{% url 'dashboard' %}"
-        class="btn btn-outline-secondary btn-lg px-4"
-        >Giám sát GIS</a
-      >
-      {% endif %} {% endif %}
+      <a href="{{ home_content.hero_button_url }}" class="btn btn-primary btn-lg px-4 me-md-2">
+        {{ home_content.hero_button_text }}
+      </a>
+      {% if request.session.user_id and request.session.role == 'admin' %}
+      <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-lg px-4">
+        Giám sát GIS
+      </a>
+      {% endif %}
     </div>
   </div>
   <div class="col-md-6 mt-4 mt-md-0">
     <img
-      src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80"
+      src="{% if home_content.hero_image %}{{ home_content.hero_image.url }}{% else %}https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80{% endif %}"
       class="img-fluid rounded-3 shadow-lg"
       alt="Car Rental"
     />
@@ -35,31 +41,95 @@
 <div class="row text-center mt-5">
   <div class="col-md-4">
     <div class="p-3">
-      <h3 class="h5">Nhiều loại xe đa dạng</h3>
-      <p class="text-muted">
-        Cung cấp nhiều loại xe từ xe máy, xe ô tô đến xe du lịch. Phù hợp cho
-        nhu cầu cá nhân, gia đình hoặc công việc.
-      </p>
+      <h3 class="h5">{{ home_content.feature_1_title }}</h3>
+      <p class="text-muted">{{ home_content.feature_1_description }}</p>
     </div>
   </div>
   <div class="col-md-4">
     <div class="p-3">
-      <h3 class="h5">Đặt xe nhanh chóng</h3>
-      <p class="text-muted">
-        Giao diện đơn giản, dễ sử dụng. Bạn có thể đặt xe chỉ trong vài bước mà
-        không cần thủ tục phức tạp.
-      </p>
+      <h3 class="h5">{{ home_content.feature_2_title }}</h3>
+      <p class="text-muted">{{ home_content.feature_2_description }}</p>
     </div>
   </div>
   <div class="col-md-4">
     <div class="p-3">
-      <h3 class="h5">Thông tin minh bạch</h3>
-      <p class="text-muted">
-        Hiển thị đầy đủ thông tin xe và giá thuê. Giúp bạn dễ dàng lựa chọn và
-        quản lý đơn thuê của mình.
-      </p>
+      <h3 class="h5">{{ home_content.feature_3_title }}</h3>
+      <p class="text-muted">{{ home_content.feature_3_description }}</p>
     </div>
   </div>
 </div>
+{% endblock %}
 
+{% block home_extra %}
+<section class="container my-5 pt-2">
+  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="h3 mb-1">{{ home_content.news_section_title }}</h2>
+      {% if home_content.news_section_subtitle %}
+      <p class="text-muted mb-0">{{ home_content.news_section_subtitle }}</p>
+      {% endif %}
+    </div>
+    {% if request.session.user_id and request.session.role == 'admin' %}
+    <div class="d-flex gap-2">
+      <a href="/news/add/" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Thêm bài báo
+      </a>
+      <a href="/home-content/edit/" class="btn btn-outline-secondary">
+        <i class="fas fa-pen"></i> Chỉnh sửa trang chủ
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if latest_news %}
+  <div class="position-relative news-slider">
+    <div class="swiper" id="newsSwiper">
+      <div class="swiper-wrapper">
+        {% for article in latest_news %}
+        <div class="swiper-slide">
+          <div class="card h-100 shadow-sm border-0">
+            <a href="/news/{{ article.id }}/" class="text-decoration-none text-dark">
+              <img src="{{ article.thumbnail.url }}" class="card-img-top news-card-img" alt="{{ article.title }}">
+              <div class="card-body">
+                <h3 class="h6 mb-0">{{ article.title }}</h3>
+              </div>
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="d-flex justify-content-end gap-2 mt-3">
+      <button class="btn btn-outline-primary news-swiper-prev" type="button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <button class="btn btn-outline-primary news-swiper-next" type="button">
+        <i class="fas fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info mb-0">Chưa có bài báo nào được đăng.</div>
+  {% endif %}
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+<script>
+  (function () {
+    var slider = document.getElementById('newsSwiper');
+    if (!slider) return;
+    new Swiper('#newsSwiper', {
+      slidesPerView: 1,
+      spaceBetween: 16,
+      navigation: {
+        nextEl: '.news-swiper-next',
+        prevEl: '.news-swiper-prev',
+      },
+      breakpoints: {
+        768: { slidesPerView: 2, slidesPerGroup: 2 },
+        992: { slidesPerView: 3, slidesPerGroup: 3 },
+      },
+    });
+  })();
+</script>
 {% endblock %}
