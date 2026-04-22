@@ -23,6 +23,15 @@
           <div class="col-12">
             <label class="form-label">Hình ảnh đại diện</label>
             {{ form.thumbnail }}
+            <div class="mt-2">
+              <img
+                id="thumbnailPreview"
+                src="#"
+                alt="Xem trước ảnh đại diện"
+                class="img-thumbnail d-none"
+                style="max-width: 220px; max-height: 140px; object-fit: cover;"
+              >
+            </div>
           </div>
           <div class="col-12">
             <label class="form-label">Nội dung bài viết</label>
@@ -46,6 +55,34 @@
 <script>
   if (window.CKEDITOR) {
     CKEDITOR.replace('id_content');
+  }
+
+  const thumbnailInput = document.getElementById('id_thumbnail');
+  const thumbnailPreview = document.getElementById('thumbnailPreview');
+
+  if (thumbnailInput && thumbnailPreview) {
+    thumbnailInput.addEventListener('change', function (event) {
+      const file = event.target.files && event.target.files[0];
+
+      if (!file) {
+        thumbnailPreview.src = '#';
+        thumbnailPreview.classList.add('d-none');
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        thumbnailPreview.src = '#';
+        thumbnailPreview.classList.add('d-none');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        thumbnailPreview.src = e.target.result;
+        thumbnailPreview.classList.remove('d-none');
+      };
+      reader.readAsDataURL(file);
+    });
   }
 </script>
 {% endblock %}

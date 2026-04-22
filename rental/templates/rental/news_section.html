@@ -15,6 +15,16 @@
       <div class="card-body p-4 p-lg-5">
         <h1 class="h2 fw-bold mb-3">{{ article.title }}</h1>
         <p class="text-muted mb-4">Đăng ngày {{ article.created_at|date:"d/m/Y H:i" }}</p>
+        {% if request.session.user_id and request.session.role == 'admin' %}
+        <div class="mb-4">
+          <form method="post" action="{% url 'delete_news' article.id %}" onsubmit="return confirm('Bạn có chắc muốn xóa bài báo này không?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="fas fa-trash-alt"></i> Xóa bài viết
+            </button>
+          </form>
+        </div>
+        {% endif %}
         <div class="news-content">
           {{ article.content|safe }}
         </div>

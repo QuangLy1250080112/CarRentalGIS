@@ -168,7 +168,14 @@
     <div class="col-lg-12">
       <div class="card border-0 shadow-sm" style="border-radius: 16px;">
         <div class="card-header bg-white border-bottom py-3">
-          <h2 class="h5 mb-0 fw-bold"><i class="fas fa-comments text-primary me-2"></i>Đánh giá từ khách hàng</h2>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 class="h5 mb-0 fw-bold"><i class="fas fa-comments text-primary me-2"></i>Đánh giá từ khách hàng</h2>
+            <div class="small text-muted">
+              <strong class="text-dark">{{ avg_rating|floatformat:1 }}</strong>/5
+              <i class="fas fa-star text-warning ms-1"></i>
+              ({{ total_reviews }} đánh giá)
+            </div>
+          </div>
         </div>
         <div class="card-body">
           <!-- Form đánh giá -->
@@ -752,7 +759,7 @@ if (document.readyState === 'loading') {
           }
           
           html += `
-            <div class="card mb-3 border-light shadow-sm" style="border-radius: 12px;">
+            <div id="review-${review.id}" class="card mb-3 border-light shadow-sm" style="border-radius: 12px;">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
@@ -772,6 +779,16 @@ if (document.readyState === 'loading') {
         console.log('[loadReviews] Rendering', reviews.length, 'reviews');
         reviewsList.innerHTML = html;
         console.log('[loadReviews] Complete!');
+
+        // Nếu mở từ lịch sử chuyến đi với hash #review-{id}, tự cuộn đến review tương ứng
+        if (window.location.hash && window.location.hash.startsWith('#review-')) {
+          const target = document.querySelector(window.location.hash);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('border-primary');
+            setTimeout(() => target.classList.remove('border-primary'), 2000);
+          }
+        }
         
         // Bind delete button handlers
         document.querySelectorAll('.delete-review-btn').forEach(btn => {

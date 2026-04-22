@@ -6,17 +6,25 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
     /* Layout chính */
-    .dashboard-container { display: flex; height: calc(100vh - 100px); gap: 20px; }
+    .dashboard-container {
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 100px);
+        gap: 14px;
+    }
     .car-list-panel { 
-        width: 350px;
+        width: 100%;
+        max-height: 48vh;
         overflow-y: auto; 
-        padding-right: 10px; 
+        padding-right: 2px; 
         scrollbar-width: thin; 
         display: flex;
         flex-direction: column;
     }
     #map-dash { 
-        flex: 1;
+        width: 100%;
+        min-height: 48vh;
+        height: 48vh;
         border-radius: 15px; 
         border: 1px solid #ddd;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -80,6 +88,73 @@
     .page-btn.disabled {
         opacity: 0.4;
         cursor: not-allowed;
+    }
+
+    @media (min-width: 992px) {
+        .dashboard-container {
+            flex-direction: row;
+            height: calc(100vh - 100px);
+            min-height: 0;
+            gap: 20px;
+        }
+        .car-list-panel {
+            width: 350px;
+            max-height: none;
+            padding-right: 10px;
+        }
+        #map-dash {
+            flex: 1;
+            min-height: 0;
+            height: auto;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .container-fluid {
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+        .car-card {
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .car-img {
+            width: 72px;
+            height: 46px;
+        }
+        .status-badge {
+            font-size: 0.68rem;
+            top: 8px;
+            right: 8px;
+        }
+        .stats-mini {
+            font-size: 0.8rem;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .dashboard-container {
+            gap: 10px;
+        }
+        #map-dash {
+            min-height: 42vh;
+            height: 42vh;
+        }
+        .btn-checkout {
+            font-size: 0.82rem;
+        }
+        .pagination-container {
+            gap: 6px;
+            padding: 10px 0;
+            flex-wrap: wrap;
+        }
+        .page-btn {
+            width: 32px;
+            height: 32px;
+            font-size: 0.78rem;
+        }
     }
 </style>
 {% endblock %}
@@ -145,6 +220,11 @@
         subdomains: 'abcd',
         maxZoom: 20
     }).addTo(map);
+    window.addEventListener('resize', function () {
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 120);
+    });
     
     L.circle({{ START_POINT|safe|default:"[10.771, 106.698]" }}, {
         color: '#28a745',
@@ -308,6 +388,7 @@
     // Chạy phân trang lần đầu khi load trang
     document.addEventListener('DOMContentLoaded', () => {
         updatePagination(1);
+        setTimeout(() => map.invalidateSize(), 120);
     });
 
 </script>

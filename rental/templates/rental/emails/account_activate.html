@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Kích hoạt tài khoản</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #222;">
+    <p>Xin chàochào {{ user.IRL_name }},</p>
+    <p>Nhấn vào nút bên dưới để kích hoạt tài khoản của bạn:</p>
+    <p>
+        <a href="http://{{ domain }}/activate/{{ token }}/" style="display: inline-block; background: #0d6efd; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 6px;">
+            Kích hoạt tài khoản
+        </a>
+    </p>
+    <p>Nếu nút không hoạt động, bạn có thể sao chép liên kết này:</p>
+    <p><a href="http://{{ domain }}/activate/{{ token }}/">http://{{ domain }}/activate/{{ token }}/</a></p>
+    <p>Trân trọng!</p>
+</body>
+</html>

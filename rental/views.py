@@ -12,6 +12,9 @@ from django.core.mail import send_mail
 from django.core import signing
 from django.conf import settings
 from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.urls import reverse
+from django.core.mail import EmailMultiAlternatives
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.gis.db.models.functions import Distance, Cast
@@ -27,12 +30,14 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 
-from django.db.models import Count
+from django.db.models import Count, Avg
 from datetime import datetime
 from functools import wraps
 
 import openpyxl
 from openpyxl.styles import Alignment
+from decimal import Decimal, InvalidOperation
+from django.db import transaction
 from .models import BookingHistory, Car, CarGalleryImage, CarType, GPSLog, HomePageContent, NewsSection, SafeZone, UserCustom, Station, Review, ReviewImage
 from .forms import HomePageContentForm, NewsSectionForm
 from .gis_tools import calculate_stats, START_POINT_COORD
@@ -65,11 +70,19 @@ def is_logged_in(request):
 def admin_only(view_func):
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        if request.session.get('role') == 'admin':
+        is_admin_role = request.session.get('role') == 'admin'
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        print(f'DEBUG admin_only: role={request.session.get("role")}, is_admin={is_admin_role}, is_ajax={is_ajax}')
+        
+        if is_admin_role:
             return view_func(request, *args, **kwargs)
         else:
-            # Nếu không phải admin, điều hướng ra trang 403
-            return render(request, 'rental/403.html', status=403)
+            # Nếu là AJAX request, trả JSON; nếu không thì render HTML
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'message': 'Bạn không có quyền truy cập.'}, status=403)
+            else:
+                return render(request, 'rental/403.html', status=403)
     return _wrapped_view
 
 # --- 1. HỆ THỐNG ĐĂNG NHẬP & QUẢN LÝ TÀI KHOẢN TỰ CHẾ ---
@@ -190,13 +203,16 @@ def register_view(request):
             # 4. Gửi mail
             current_site = get_current_site(request)
             subject = 'Kích hoạt tài khoản của bạn'
-            message = render_to_string('registration/account_activate.html', {
+            html_message = render_to_string('rental/emails/account_activate.html', {
                 'user': user,
                 'domain': current_site.domain,
                 'token': token,
             })
-
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
+            plain_message = strip_tags(html_message)
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', settings.EMAIL_HOST_USER)
+            email_message = EmailMultiAlternatives(subject, plain_message, from_email, [email])
+            email_message.attach_alternative(html_message, "text/html")
+            email_message.send()
 
             messages.warning(request, "Đăng ký thành công! Vui lòng kiểm tra Mailtrap để kích hoạt tài khoản.")
             return redirect('login')
@@ -222,6 +238,64 @@ def activate(request, token):
     else:
         messages.error(request, "Link kích hoạt không hợp lệ hoặc đã hết hạn.")
         return redirect('register')
+
+
+def forgot_password(request):
+    if request.method == 'POST':
+        email = (request.POST.get('email') or '').strip().lower()
+        user = UserCustom.objects.filter(email__iexact=email).first()
+
+        if user:
+            token = signing.dumps({'user_id': user.pk, 'purpose': 'reset_password'})
+            reset_url = request.build_absolute_uri(
+                reverse('password_reset_confirm', kwargs={'token': token})
+            )
+            subject = 'Yeu cau dat lai mat khau'
+            html_message = render_to_string('rental/emails/password_reset_email.html', {
+                'user': user,
+                'reset_url': reset_url,
+            })
+            plain_message = strip_tags(html_message)
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', settings.EMAIL_HOST_USER)
+
+            email_message = EmailMultiAlternatives(subject, plain_message, from_email, [user.email])
+            email_message.attach_alternative(html_message, "text/html")
+            email_message.send()
+
+        messages.success(
+            request,
+            "Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến email của bạn."
+        )
+        return redirect('login')
+
+    return render(request, 'rental/auth/password_reset_request.html')
+
+
+def password_reset_confirm(request, token):
+    try:
+        data = signing.loads(token, max_age=1800)
+        if data.get('purpose') != 'reset_password':
+            raise signing.BadSignature
+        user = UserCustom.objects.get(pk=data['user_id'])
+    except (signing.SignatureExpired, signing.BadSignature, UserCustom.DoesNotExist):
+        messages.error(request, "Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạnhạn.")
+        return redirect('forgot_password')
+
+    if request.method == 'POST':
+        new_password = (request.POST.get('password') or '').strip()
+        confirm_password = (request.POST.get('confirm_password') or '').strip()
+
+    
+        if new_password != confirm_password:
+            messages.error(request, "Mật khẩu xác nhận không khớp, vui lòng thử lại.")
+            return render(request, 'rental/auth/password_reset_confirm.html', {'token': token})
+
+        user.password = new_password
+        user.save(update_fields=['password'])
+        messages.success(request, "Đặt lại mật khẩu thành công, vui lòng đăng nhập lại.")
+        return redirect('login')
+
+    return render(request, 'rental/auth/password_reset_confirm.html', {'token': token})
 # --- 2. CÁC VIEW GIAO DIỆN CHÍNH (KHÔNG THAY ĐỔI LOGIC) -----
 
 def home(request):
@@ -252,6 +326,26 @@ def add_news(request):
     else:
         form = NewsSectionForm()
     return render(request, 'rental/news_form.html', {'form': form})
+
+
+@admin_only
+def delete_news(request, news_id):
+    if request.method != 'POST':
+        return redirect('news_detail', news_id=news_id)
+
+    article = get_object_or_404(NewsSection, id=news_id)
+    title = article.title
+
+    if article.thumbnail:
+        try:
+            if os.path.isfile(article.thumbnail.path):
+                os.remove(article.thumbnail.path)
+        except OSError:
+            pass
+
+    article.delete()
+    messages.success(request, f'Đã xóa bài báo "{title}" thành công.')
+    return redirect('home')
 
 
 @admin_only
@@ -287,6 +381,10 @@ def car_detail_view(request, type_id):
 def car_description(request, car_id):
     car = get_object_or_404(Car, id=car_id)
     gallery = list(car.gallery_images.all())
+    review_summary = Review.objects.filter(car=car).aggregate(
+        avg_rating=Avg('rating'),
+        total_reviews=Count('id')
+    )
     slides = []
     if car.image:
         slides.append({'url': car.image.url, 'caption': 'Ảnh đại diện'})
@@ -325,6 +423,8 @@ def car_description(request, car_id):
         'car': car,
         'gallery': gallery,
         'slides': slides,
+        'avg_rating': review_summary['avg_rating'] or 0,
+        'total_reviews': review_summary['total_reviews'] or 0,
     })
 
 
@@ -628,6 +728,200 @@ def get_cars_in_zone(request):
 
 # --- 4. QUẢN LÝ THÊM/XÓA XE (DÙNG CHO TRANG ADMIN RIÊNG) ---
 
+REQUIRED_EXCEL_HEADERS = ['Loại xe', 'Hãng xe', 'Biển số xe', 'Phí định mức']
+
+
+def _read_car_excel_rows(uploaded_file):
+    workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
+    worksheet = workbook.active
+    header_cells = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    
+    print(f'DEBUG _read_car_excel_rows: header_cells = {header_cells}')
+    
+    if not header_cells:
+        return None, None, ['File Excel không có dòng tiêu đề.']
+
+    normalized_headers = [(cell or '').strip() for cell in header_cells]
+    print(f'DEBUG: normalized_headers = {normalized_headers}')
+    
+    missing_headers = [h for h in REQUIRED_EXCEL_HEADERS if h not in normalized_headers]
+    if missing_headers:
+        return None, None, [f"Thiếu cột bắt buộc: {', '.join(missing_headers)}"]
+
+    header_index = {name: normalized_headers.index(name) for name in REQUIRED_EXCEL_HEADERS}
+    print(f'DEBUG: header_index = {header_index}')
+    
+    parsed_rows = []
+    errors = []
+
+    for row_idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=True), start=2):
+        raw_type = row[header_index['Loại xe']] if header_index['Loại xe'] < len(row) else ''
+        raw_brand = row[header_index['Hãng xe']] if header_index['Hãng xe'] < len(row) else ''
+        raw_plate = row[header_index['Biển số xe']] if header_index['Biển số xe'] < len(row) else ''
+        raw_price = row[header_index['Phí định mức']] if header_index['Phí định mức'] < len(row) else ''
+
+        type_name = str(raw_type or '').strip()
+        brand_name = str(raw_brand or '').strip()
+        license_plate = str(raw_plate or '').strip().upper()
+        price_text = str(raw_price or '').strip()
+
+        print(f'DEBUG row {row_idx}: type={type_name}, brand={brand_name}, plate={license_plate}, price={price_text}')
+
+        # Bỏ qua dòng trống hoàn toàn.
+        if not any([type_name, brand_name, license_plate, price_text]):
+            print(f'DEBUG row {row_idx}: Bỏ qua dòng trống')
+            continue
+
+        row_errors = []
+        if not type_name:
+            row_errors.append('Thiếu Loại xe')
+        if not brand_name:
+            row_errors.append('Thiếu Hãng xe')
+        if not license_plate:
+            row_errors.append('Thiếu Biển số xe')
+        if not price_text:
+            row_errors.append('Thiếu Phí định mức')
+
+        parsed_price = None
+        if price_text:
+            try:
+                parsed_price = Decimal(price_text)
+                if parsed_price < 0:
+                    row_errors.append('Phí định mức phải >= 0')
+            except (InvalidOperation, TypeError):
+                row_errors.append('Phí định mức không hợp lệ')
+
+        parsed_rows.append({
+            'excel_row': row_idx,
+            'type_name': type_name,
+            'brand_name': brand_name,
+            'license_plate': license_plate,
+            'base_price_per_km': str(parsed_price) if parsed_price is not None else '',
+            'errors': row_errors,
+        })
+
+    if not parsed_rows:
+        errors.append('Không có dữ liệu xe hợp lệ trong file.')
+    
+    print(f'DEBUG: Tổng parsed_rows = {len(parsed_rows)}, errors = {errors}')
+
+    return workbook, parsed_rows, errors
+
+
+@admin_only
+def preview_add_car_excel(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Yêu cầu không hợp lệ.'}, status=405)
+
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        return JsonResponse({'status': 'error', 'message': 'Vui lòng chọn file Excel.'}, status=400)
+
+    print(f'DEBUG: Excel file nhận được: {excel_file.name}')
+    
+    _, parsed_rows, global_errors = _read_car_excel_rows(excel_file)
+    print(f'DEBUG: global_errors = {global_errors}')
+    print(f'DEBUG: parsed_rows = {parsed_rows}')
+    
+    if global_errors:
+        return JsonResponse({'status': 'error', 'message': ' | '.join(global_errors)}, status=400)
+
+    car_type_map = {ct.name.lower(): ct for ct in CarType.objects.all()}
+    print(f'DEBUG: car_type_map = {list(car_type_map.keys())}')
+    
+    seen_plates = set()
+
+    for row in parsed_rows:
+        if row['type_name'].lower() not in car_type_map:
+            row['errors'].append(f"Loại xe '{row['type_name']}' chưa tồn tại trong hệ thống")
+        if row['license_plate'] in seen_plates:
+            row['errors'].append(f"Biển số {row['license_plate']} bị trùng trong file Excel")
+        seen_plates.add(row['license_plate'])
+        if Car.objects.filter(license_plate=row['license_plate']).exists():
+            row['errors'].append(f"Biển số {row['license_plate']} đã tồn tại trong hệ thống, vui lòng kiểm tra lại")
+
+    has_errors = any(row['errors'] for row in parsed_rows)
+    
+    print(f'DEBUG: Final response - rows count = {len(parsed_rows)}, has_errors = {has_errors}')
+    
+    return JsonResponse({
+        'status': 'success',
+        'rows': parsed_rows,
+        'has_errors': has_errors,
+    })
+
+
+@admin_only
+def import_add_car_excel(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Yêu cầu không hợp lệ.'}, status=405)
+
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        return JsonResponse({'status': 'error', 'message': 'Thiếu file Excel.'}, status=400)
+
+    _, parsed_rows, global_errors = _read_car_excel_rows(excel_file)
+    if global_errors:
+        return JsonResponse({'status': 'error', 'message': ' | '.join(global_errors)}, status=400)
+
+    car_type_map = {ct.name.lower(): ct for ct in CarType.objects.all()}
+    seen_plates = set()
+
+    for row in parsed_rows:
+        if row['type_name'].lower() not in car_type_map:
+            row['errors'].append(f"Loại xe '{row['type_name']}' chưa tồn tại trong hệ thống")
+        if row['license_plate'] in seen_plates:
+            row['errors'].append(f"Biển số {row['license_plate']} bị trùng trong file Excel")
+        seen_plates.add(row['license_plate'])
+        if Car.objects.filter(license_plate=row['license_plate']).exists():
+            row['errors'].append(f"Biển số {row['license_plate']} đã tồn tại trong hệ thống, vui lòng kiểm tra lại")
+
+    rows_with_errors = [r for r in parsed_rows if r['errors']]
+    if rows_with_errors:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Dữ liệu Excel có lỗi, vui lòng kiểm tra lại.',
+            'rows': parsed_rows,
+        }, status=400)
+
+    # Lấy danh sách dòng được chọn từ request (nếu có)
+    selected_rows_param = request.POST.get('selected_rows', '')
+    selected_row_numbers = set()
+    if selected_rows_param:
+        try:
+            selected_row_numbers = set(int(x) for x in selected_rows_param.split(',') if x.strip())
+        except (ValueError, AttributeError):
+            pass
+    
+    # Nếu không có dòng được chọn, import tất cả
+    rows_to_import = parsed_rows
+    if selected_row_numbers:
+        rows_to_import = [r for r in parsed_rows if r['excel_row'] in selected_row_numbers]
+
+    created_count = 0
+    with transaction.atomic():
+        for row in rows_to_import:
+            car_type = car_type_map[row['type_name'].lower()]
+            car_type.base_price_per_km = Decimal(row['base_price_per_km'])
+            car_type.save(update_fields=['base_price_per_km'])
+
+            image_field_name = f"row_image_{row['excel_row']}"
+            image_file = request.FILES.get(image_field_name)
+
+            Car.objects.create(
+                car_type=car_type,
+                brand_name=row['brand_name'],
+                license_plate=row['license_plate'],
+                image=image_file,
+                current_location=START_POINT_GIS
+            )
+            created_count += 1
+
+    return JsonResponse({
+        'status': 'success',
+        'message': f'Đã thêm thành công {created_count} xe từ file Excel.',
+    })
+
 def get_addCar(request):
     if not is_admin(request):
         return redirect('login')
@@ -898,10 +1192,14 @@ def booking_history_list(request):
     role = request.session.get('role')
     # Nếu là Admin: Lấy tất cả lịch sử của mọi người dùng
     if role == 'admin':
-        histories = BookingHistory.objects.all().order_by('-start_time')
+        histories = BookingHistory.objects.select_related(
+            'car', 'pickup_station', 'return_station', 'user', 'review'
+        ).all().order_by('-start_time')
     # Nếu là Guest: Chỉ lấy lịch sử của chính mình
     else:
-        histories = BookingHistory.objects.filter(user_id=user_id).order_by('-start_time')
+        histories = BookingHistory.objects.select_related(
+            'car', 'pickup_station', 'return_station', 'user', 'review'
+        ).filter(user_id=user_id).order_by('-start_time')
     for h in histories:
         if h.status == 'ongoing' and h.car:
             stats = calculate_stats(h.car)
@@ -912,6 +1210,14 @@ def booking_history_list(request):
             h.display_km = h.total_distance
             h.display_fee = h.total_fee
             h.is_violated = False
+        try:
+            h.review_obj = h.review
+            h.review_rating = h.review_obj.rating
+            h.review_id = h.review_obj.id
+        except Review.DoesNotExist:
+            h.review_obj = None
+            h.review_rating = 0
+            h.review_id = None
     return render(request, 'rental/booking_history.html', {'histories': histories})
 
 def return_car(request, history_id):

@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('news/<int:news_id>/', views.news_detail, name='news_detail'),
     path('news/add/', views.add_news, name='add_news'),
+    path('news/delete/<int:news_id>/', views.delete_news, name='delete_news'),
     path('home-content/edit/', views.edit_home_content, name='edit_home_content'),
     path('car-types/', views.car_types_view, name='car_types'),
     path('car-type/<int:type_id>/', views.car_detail_view, name='car_detail'),
@@ -26,10 +27,15 @@ urlpatterns = [
     path('logout/', views.custom_logout, name='logout'),
     path('register/', views.register_view, name='register'),
     path('activate/<str:token>/', views.activate, name='activate'),
+    path('forgot-password/', views.forgot_password, name='forgot_password'),
+    path('reset-password/<str:token>/', views.password_reset_confirm, name='password_reset_confirm'),
     path('accounts/', views.account_management, name='account_management'),
     
     path('addCar/', views.get_addCar, name='add_car'),
+    path('addCar', views.get_addCar, name='add_car_no_slash'),
     path('addCar_save/', views.add_car, name='add_car_save'),
+    path('addCar_excel/preview/', views.preview_add_car_excel, name='preview_add_car_excel'),
+    path('addCar_excel/import/', views.import_add_car_excel, name='import_add_car_excel'),
     path('delete/<int:id>/', views.delete_car, name='delete_car'),
     path('car/short-description/', views.update_car_short_description, name='update_car_short_description'),
       

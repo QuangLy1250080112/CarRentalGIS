@@ -3,10 +3,21 @@
 <div class="container mt-5">
     <div class="card shadow-sm p-4 mx-auto" style="max-width: 600px;">
         <h3 class="fw-bold mb-4"><i class="fas fa-plus-circle text-primary"></i> Thêm xe vào hệ thống</h3>
-        
+        <div class="border rounded p-3 mb-4 bg-light">
+            <h5 class="fw-bold mb-3">Thêm xe từ file Excel</h5>
+            <div id="excelFilesContainer" class="mb-3"></div>
+            <div class="mb-2">
+                <input type="file" id="excelFileInput" class="form-control" accept=".xlsx,.xls">
+            </div>
+            <small class="text-muted d-block mb-3">
+                File cần có các cột: Loại xe, Hãng xe, Biển số xe, Phí định mức.
+            </small>
+        </div>
+
         <form action="/addCar_save/" method="post" enctype="multipart/form-data">
             {% csrf_token %}
-            
+            <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+
             <div class="mb-3">
                 <label class="form-label fw-bold">Chọn Loại xe:</label>
                 <select name="car_type_id" class="form-select" required>
@@ -45,4 +56,369 @@
         </form>
     </div>
 </div>
+
+<div class="modal fade" id="excelPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Xác nhận thêm xe từ Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+<div class="modal-body">
+                <div id="excelPreviewMessage" class="alert d-none"></div>
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllCheckbox" title="Chọn/bỏ chọn tất cả">
+                                </th>
+                                <th>Dòng</th>
+                                <th>Loại xe</th>
+                                <th>Hãng xe</th>
+                                <th>Biển số xe</th>
+                                <th>Phí định mức</th>
+                                <th>Hình ảnh</th>
+                                <th>Preview</th>
+                                <th style="width: 50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="excelPreviewBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-success" id="confirmImportBtn">Xác nhận thêm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const excelInput = document.getElementById('excelFileInput');
+    const confirmBtn = document.getElementById('confirmImportBtn');
+    const previewBody = document.getElementById('excelPreviewBody');
+    const previewMessage = document.getElementById('excelPreviewMessage');
+    const csrfToken = document.getElementById('csrfToken').value;
+    const modalEl = document.getElementById('excelPreviewModal');
+    const filesContainer = document.getElementById('excelFilesContainer');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    
+    // Quản lý multiple files
+    const filesMap = new Map(); // key: fileId, value: {file, fileName, parsed_rows, rowImageMap}
+    let currentFileId = null;
+    
+    let previewModal = null;
+    function getPreviewModal() {
+        if (!previewModal) {
+            previewModal = new bootstrap.Modal(modalEl);
+        }
+        return previewModal;
+    }
+
+    function setMessage(text, type = 'danger') {
+        previewMessage.className = `alert alert-${type}`;
+        previewMessage.textContent = text;
+        previewMessage.classList.remove('d-none');
+    }
+
+    function clearMessage() {
+        previewMessage.classList.add('d-none');
+        previewMessage.textContent = '';
+    }
+
+    function generateFileId() {
+        return 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function updateFilesContainer() {
+        filesContainer.innerHTML = '';
+        filesMap.forEach((fileData, fileId) => {
+            const div = document.createElement('div');
+            div.className = 'input-group mb-2';
+            div.innerHTML = `
+                <span class="input-group-text">${fileData.fileName}</span>
+                <button type="button" class="btn btn-sm btn-info btn-preview" data-file-id="${fileId}">
+                    <i class="fas fa-eye"></i> Xem
+                </button>
+                <button type="button" class="btn btn-sm btn-danger btn-remove-file" data-file-id="${fileId}">
+                    <i class="fas fa-trash"></i> Xóa
+                </button>
+            `;
+            filesContainer.appendChild(div);
+        });
+        
+        // Gắn event listeners
+        filesContainer.querySelectorAll('.btn-preview').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const fileId = e.currentTarget.dataset.fileId;
+                showFilePreview(fileId);
+            });
+        });
+        
+        filesContainer.querySelectorAll('.btn-remove-file').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const fileId = e.currentTarget.dataset.fileId;
+                filesMap.delete(fileId);
+                if (currentFileId === fileId) {
+                    currentFileId = null;
+                }
+                updateFilesContainer();
+            });
+        });
+    }
+
+    function renderPreviewRows(rows) {
+        previewBody.innerHTML = '';
+        const rowImageMap = filesMap.get(currentFileId)?.rowImageMap || new Map();
+
+        rows.forEach((row) => {
+            const tr = document.createElement('tr');
+            const hasError = row.errors && row.errors.length > 0;
+            if (hasError) {
+                tr.classList.add('table-danger');
+            }
+
+            const errorHtml = hasError ? `<div class="text-danger small mt-1">${row.errors.join('<br>')}</div>` : '';
+            tr.innerHTML = `
+                <td>
+                    <input type="checkbox" class="row-checkbox" data-row="${row.excel_row}">
+                </td>
+                <td>${row.excel_row}</td>
+                <td>${row.type_name}${errorHtml}</td>
+                <td>${row.brand_name}</td>
+                <td>${row.license_plate}</td>
+                <td>${row.base_price_per_km}</td>
+                <td><input type="file" class="form-control form-control-sm row-image-input" data-row="${row.excel_row}" accept="image/*"></td>
+                <td><img data-preview-row="${row.excel_row}" src="" alt="preview" style="max-width: 90px; max-height: 60px; display: none;"></td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger btn-delete-row" data-row="${row.excel_row}">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            previewBody.appendChild(tr);
+        });
+
+        // Gắn event listeners cho checkboxes
+        selectAllCheckbox.addEventListener('change', (e) => {
+            previewBody.querySelectorAll('.row-checkbox').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
+
+        // Gắn event listeners cho file input (hình ảnh)
+        previewBody.querySelectorAll('.row-image-input').forEach((input) => {
+            input.addEventListener('change', (event) => {
+                const target = event.currentTarget;
+                const excelRow = target.dataset.row;
+                const file = target.files && target.files[0] ? target.files[0] : null;
+                const previewImg = previewBody.querySelector(`img[data-preview-row="${excelRow}"]`);
+
+                if (!file) {
+                    rowImageMap.delete(excelRow);
+                    previewImg.style.display = 'none';
+                    previewImg.src = '';
+                    return;
+                }
+
+                rowImageMap.set(excelRow, file);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImg.src = e.target.result;
+                    previewImg.style.display = 'inline-block';
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Gắn event listeners cho nút xóa dòng
+        previewBody.querySelectorAll('.btn-delete-row').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                const excelRow = e.currentTarget.dataset.row;
+                const rowIndex = rows.findIndex(r => r.excel_row == excelRow);
+                if (rowIndex !== -1) {
+                    rows.splice(rowIndex, 1);
+                    renderPreviewRows(rows);
+                }
+            });
+        });
+    }
+
+    function showFilePreview(fileId) {
+        currentFileId = fileId;
+        const fileData = filesMap.get(fileId);
+        if (!fileData) {
+            setMessage('Không tìm thấy file này.');
+            return;
+        }
+
+        clearMessage();
+        renderPreviewRows(fileData.parsed_rows);
+        
+        const has_errors = fileData.parsed_rows.some((row) => row.errors && row.errors.length > 0);
+        if (has_errors) {
+            setMessage('Dữ liệu có lỗi. Vui lòng sửa file Excel trước khi xác nhận import.', 'warning');
+        } else {
+            setMessage('Dữ liệu hợp lệ. Bạn có thể gắn ảnh rồi bấm Xác nhận thêm.', 'success');
+        }
+        
+        getPreviewModal().show();
+    }
+
+    async function handleFileUpload(event) {
+        clearMessage();
+        const excelFile = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+        if (!excelFile) {
+            console.log('Chưa chọn file');
+            return;
+        }
+
+        console.log('File được chọn:', excelFile.name);
+        const fileId = generateFileId();
+        const formData = new FormData();
+        formData.append('excel_file', excelFile);
+
+        try {
+            excelInput.disabled = true;
+            console.log('Đang gửi request tới preview_add_car_excel...');
+            const response = await fetch("{% url 'preview_add_car_excel' %}", {
+                method: 'POST',
+                headers: { 
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+            
+            console.log('Response status:', response.status);
+            const payload = await response.json();
+            console.log('Response JSON:', payload);
+            
+            if (!response.ok) {
+                alert(payload.message || 'Không thể đọc file Excel.');
+                return;
+            }
+
+            const parsed_rows = payload.rows || [];
+            
+            // Lưu file vào map
+            filesMap.set(fileId, {
+                file: excelFile,
+                fileName: excelFile.name,
+                parsed_rows: parsed_rows,
+                rowImageMap: new Map()
+            });
+
+            // Reset input và cập nhật UI
+            excelInput.value = '';
+            updateFilesContainer();
+            
+            // Tự động hiển thị preview
+            showFilePreview(fileId);
+        } catch (error) {
+            console.error('Lỗi:', error);
+            alert('Có lỗi khi xử lý file Excel. Vui lòng thử lại.');
+        } finally {
+            excelInput.disabled = false;
+        }
+    }
+
+    // Gắn event listener cho file input - tự động upload khi file được chọn
+    excelInput.addEventListener('change', handleFileUpload);
+
+    confirmBtn.addEventListener('click', async () => {
+        clearMessage();
+        
+        if (!currentFileId || !filesMap.has(currentFileId)) {
+            setMessage('Vui lòng chọn file để import.');
+            return;
+        }
+
+        const fileData = filesMap.get(currentFileId);
+        
+        // Lấy các dòng được chọn
+        const selectedRows = [];
+        const selectedRowNumbers = [];
+        previewBody.querySelectorAll('.row-checkbox:checked').forEach(cb => {
+            const rowNum = cb.dataset.row;
+            const row = fileData.parsed_rows.find(r => r.excel_row == rowNum);
+            if (row) {
+                selectedRows.push(row);
+                selectedRowNumbers.push(rowNum);
+            }
+        });
+
+        const rowsToImport = selectedRows.length > 0 ? selectedRows : fileData.parsed_rows;
+
+        if (!rowsToImport.length) {
+            setMessage('Vui lòng chọn ít nhất một dòng để import.');
+            return;
+        }
+
+        const hasErrors = rowsToImport.some((row) => row.errors && row.errors.length > 0);
+        if (hasErrors) {
+            setMessage('Dữ liệu đang có lỗi, không thể import.', 'warning');
+            return;
+        }
+
+        const excelFile = fileData.file;
+        const rowImageMap = fileData.rowImageMap;
+
+        const formData = new FormData();
+        formData.append('excel_file', excelFile);
+        
+        // Gửi danh sách dòng được chọn
+        if (selectedRowNumbers.length > 0) {
+            formData.append('selected_rows', selectedRowNumbers.join(','));
+        }
+        
+        rowImageMap.forEach((file, excelRow) => {
+            formData.append(`row_image_${excelRow}`, file);
+        });
+
+        try {
+            confirmBtn.disabled = true;
+            console.log('Đang import dữ liệu...');
+            const response = await fetch("{% url 'import_add_car_excel' %}", {
+                method: 'POST',
+                headers: { 
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+            
+            console.log('Import response status:', response.status);
+            const payload = await response.json();
+            console.log('Import response:', payload);
+            
+            if (!response.ok) {
+                setMessage(payload.message || 'Import thất bại.');
+                if (payload.rows) {
+                    fileData.parsed_rows = payload.rows;
+                    renderPreviewRows(fileData.parsed_rows);
+                }
+                return;
+            }
+
+            setMessage(payload.message || 'Import thành công.', 'success');
+            
+            // Xóa file đã import
+            filesMap.delete(currentFileId);
+            currentFileId = null;
+            updateFilesContainer();
+            
+            setTimeout(() => window.location.href = "{% url 'car_types' %}", 900);
+        } catch (error) {
+            console.error('Lỗi import:', error);
+            setMessage('Có lỗi khi import dữ liệu.');
+        } finally {
+            confirmBtn.disabled = false;
+        }
+    });
+})();
+</script>
 {% endblock %}

@@ -9,14 +9,16 @@
 
 <style>
     .main-container { 
-        display: flex; 
-        height: calc(100vh - 150px); 
-        gap: 15px; 
+        display: flex;
+        flex-direction: column;
+        gap: 12px; 
         padding: 10px; 
-        background-color: #f4f7f6; 
+        background-color: #f4f7f6;
+        min-height: calc(100vh - 150px);
     }
     .left-panel { 
-        width: 300px; 
+        width: 100%;
+        max-height: 45vh;
         display: flex; 
         flex-direction: column; 
         background: white; 
@@ -26,7 +28,9 @@
         overflow-y: auto; 
     }
     .map-panel { 
-        flex-grow: 1; 
+        width: 100%;
+        min-height: 50vh;
+        height: 50vh;
         border-radius: 12px; 
         overflow: hidden; 
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
@@ -34,7 +38,8 @@
     #map { height: 100%; width: 100%; }
 
     .right-panel { 
-        width: 300px; 
+        width: 100%;
+        max-height: 45vh;
         display: flex; 
         flex-direction: column; 
         background: white; 
@@ -123,6 +128,59 @@
 
     /* Style bổ sung cho Modal Map */
     #modalMap { height: 300px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #ddd; }
+
+    @media (min-width: 992px) {
+        .main-container {
+            flex-direction: row;
+            align-items: stretch;
+            height: calc(100vh - 150px);
+            min-height: 0;
+        }
+        .left-panel {
+            width: auto;
+            flex: 0 0 26%;
+            max-width: 380px;
+            max-height: none;
+        }
+        .right-panel {
+            width: auto;
+            flex: 0 0 26%;
+            max-width: 380px;
+            max-height: none;
+        }
+        .map-panel {
+            flex: 1 1 48%;
+            min-width: 0;
+            min-height: 0;
+            height: auto;
+        }
+    }
+
+    @media (min-width: 1400px) {
+        .left-panel, .right-panel {
+            flex-basis: 27%;
+            max-width: 430px;
+        }
+        .map-panel {
+            flex-basis: 46%;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .main-container {
+            padding: 8px;
+            gap: 10px;
+        }
+        .left-panel, .right-panel {
+            padding: 12px;
+        }
+        .station-card:hover {
+            transform: none;
+        }
+        #modalMap {
+            height: 240px;
+        }
+    }
 </style>
 
 <div class="main-container">
@@ -211,10 +269,10 @@
 
         <div class="route-finder-box mb-3">
             <div class="small fw-bold text-secondary mb-2">
-                <i class="fas fa-route text-danger me-1"></i>Đường đi (OSRM)
+                <i class="fas fa-route text-danger me-1"></i>Đường đi đến trạm gần nhất
             </div>
             <p class="small text-muted mb-2" style="line-height: 1.35;">
-                Xuất phát từ <strong class="text-danger">marker đỏ</strong> trên bản đồ nếu đã chọn điểm; nếu chưa chọn thì dùng điểm mặc định (Bến Thành).
+                Xuất phát từ <strong class="text-danger">marker đỏ</strong> trên bản đồ nếu đã chọn điểm
             </p>
             <button type="button" id="btn-route-nearest" class="btn route-line-btn w-100 py-2 mb-2">
                 <i class="fas fa-location-arrow me-2"></i>Tìm đường tới trạm gần nhất
@@ -310,6 +368,11 @@
         subdomains: 'abcd',
         maxZoom: 20
     }).addTo(map);
+    window.addEventListener('resize', function () {
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 120);
+    });
 
     var redIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',

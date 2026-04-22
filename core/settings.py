@@ -101,6 +101,7 @@ EMAIL_HOST_USER = 'e3d76e69541f89'
 EMAIL_HOST_PASSWORD = '3a3d04ab8b8397'
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
+DEFAULT_FROM_EMAIL = 'noreply@carrentalgis.local'
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
