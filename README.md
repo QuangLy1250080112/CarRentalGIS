@@ -157,20 +157,6 @@ EMAIL_HOST_PASSWORD=your-mailtrap-password
 python manage.py migrate
 ```
 
-#### c) Tạo Superuser (Admin Account)
-```bash
-python manage.py createsuperuser
-# Nhập thông tin:
-# Username: admin
-# Email: admin@example.com
-# Password: ****
-```
-
-#### d) Tải Dữ Liệu Mẫu (Tùy Chọn)
-```bash
-python manage.py runscript seed_data
-```
-
 ### 5. Chạy Development Server
 
 ```bash
@@ -179,10 +165,6 @@ python manage.py runserver
 
 Truy cập ứng dụng tại: **http://localhost:8000**
 
-Truy cập Admin Panel: **http://localhost:8000/admin**
-- Đăng nhập bằng tài khoản superuser vừa tạo
-
----
 
 ## 📁 Cấu Trúc Project
 
