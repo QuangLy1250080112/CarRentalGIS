@@ -138,22 +138,9 @@ OSGEO4W_ROOT = r'D:\OSGeo4W'  # Thay đổi nếu cài đặt ở nơi khác
 
 ### 4. Cấu Hình Django
 
-#### a) Tạo Environment Variables (Tùy Chọn)
-Tạo file `.env` tại thư mục gốc:
-```
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-DATABASE_NAME=car_rental_gis
-DATABASE_USER=postgres
-DATABASE_PASSWORD=123
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-EMAIL_HOST_USER=your-mailtrap-user
-EMAIL_HOST_PASSWORD=your-mailtrap-password
-```
-
-#### b) Apply Database Migrations
+#### a) Apply Database Migrations
 ```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
 
