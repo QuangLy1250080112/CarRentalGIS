@@ -250,7 +250,7 @@ def forgot_password(request):
             reset_url = request.build_absolute_uri(
                 reverse('password_reset_confirm', kwargs={'token': token})
             )
-            subject = 'Yeu cau dat lai mat khau'
+            subject = 'Yêu cầu đặt lại mật khẩu'
             html_message = render_to_string('rental/emails/password_reset_email.html', {
                 'user': user,
                 'reset_url': reset_url,
@@ -1021,20 +1021,16 @@ def add_station(request):
         name = request.POST.get('name')
         lat = float(request.POST.get('lat'))
         lon = float(request.POST.get('lon'))
-        capacity = request.POST.get('capacity', 10)
-
+        # Ép kiểu int ngay tại đây, nếu trống thì mặc định là 10
+        capacity = int(request.POST.get('capacity') or 10)
+        
         if capacity < 0:
             messages.error(request, "Sức chứa không được là số âm!")
             return redirect('station_list')
         
-        # 1. Tạo Point từ tọa độ (Kinh độ trước, Vĩ độ sau cho GIS)
-        pnt = Point(lon, lat, srid=4326)
+        # Tạo vùng Polygon từ Point (giữ nguyên logic của bạn)
+        station_area = Point(lon, lat, srid=4326).buffer(0.0005) 
         
-        # 2. Tạo vùng Polygon nhỏ quanh điểm đó (khoảng 50m) 
-        # Trong thực tế 0.0005 độ xấp xỉ 50m
-        station_area = pnt.buffer(0.0005) 
-        
-        # 3. Lưu vào Database
         Station.objects.create(
             name=name,
             area=station_area,
@@ -1042,8 +1038,6 @@ def add_station(request):
         )
         
         messages.success(request, f"Đã thêm trạm {name} thành công!")
-        return redirect('station_list')
-        
     return redirect('station_list')
 
 def validate_return(car, return_location):

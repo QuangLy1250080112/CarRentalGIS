@@ -1,6 +1,8 @@
 asgiref==3.11.1
 Django==6.0.2
 django-leaflet==0.33.0
+django-cors-headers==4.3.1
+django-environ==0.21.0
 et_xmlfile==2.0.0
 geographiclib==2.1
 geopy==2.4.1
@@ -9,3 +11,5 @@ pillow==12.1.1
 psycopg2-binary==2.9.11
 sqlparse==0.5.5
 tzdata==2025.3
+python-decouple==3.8
+requests==2.31.0
