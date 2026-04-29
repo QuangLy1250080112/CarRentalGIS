@@ -117,7 +117,7 @@ cd CarRentalGIS
 ```bash
 # Trên Windows (PowerShell):
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate
 
 # Trên macOS/Linux:
 python3 -m venv venv
